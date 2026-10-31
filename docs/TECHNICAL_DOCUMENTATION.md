@@ -13,6 +13,7 @@
    - [4.2 State-Space PINN Thermal Forecaster](#42-state-space-pinn-thermal-forecaster)
    - [4.3 Multivariate Anomaly Detection (IsolationForest + Physics Residual)](#43-multivariate-anomaly-detection-isolationforest--physics-residual)
    - [4.4 Constrained Model Predictive Control (MPC) & Control Barrier Functions (CBF)](#44-constrained-model-predictive-control-mpc--control-barrier-functions-cbf)
+   - [4.5 PUE Decomposition, Utility TOU Tariff, UPS BESS Peak-Shaving & Thermal Storage](#45-pue-decomposition-utility-tou-tariff-ups-bess-peak-shaving--thermal-storage)
 5. [Autonomous OpenRouter LLM Tool-Calling & GraphRAG Architecture](#5-autonomous-openrouter-llm-tool-calling--graphrag-architecture)
 6. [DuckDB + Parquet Time-Series Historian & BYOD Schema Auto-Mapper](#6-duckdb--parquet-time-series-historian--byod-schema-auto-mapper)
 7. [3D WebGL Rendering & Dual-Theme Frontend Architecture](#7-3d-webgl-rendering--dual-theme-frontend-architecture)
@@ -131,6 +132,18 @@ Subject to three hard **Control Barrier Functions (CBFs)**:
 2. **CBF-2 (Liquid Boiling / Cold-Plate SLA)**: $h_2(x) = 40.0^\circ\text{C} - T_{\text{cdu\_return, max}}(x) \ge 0$
 3. **CBF-3 (Anti-Hunting VFD Slew Limit)**: $\|\Delta \text{RPM}_t\| \le 4.0\% / \text{min}$
 
+### 4.5 PUE Decomposition, Utility TOU Tariff, UPS BESS Peak-Shaving & Thermal Storage
+Implemented in [`DataCenterAIService.compute_energy_grid_management`](file:///Users/pb/dctwin/backend/ai_engine.py#L1239-L1358).
+Co-optimizes electrical grid import ($P_{\text{grid}, t}$) across a 24-hour Time-of-Use (`TOU`) tariff schedule (`OFF_PEAK` @ `$0.068/kWh`, `SHOULDER` @ `$0.112–$0.115/kWh`, `CRITICAL_PEAK` @ `$0.185–$0.285/kWh`) using two facility-side storage buffers:
+
+1. **UPS-A / UPS-B Li-Ion BESS Peak-Demand Shaving ($P_{\text{BESS}, t}$)**:
+   - Discharges `115–165 kW` during `14:00–20:00` critical-peak windows (retaining `>85%` SOC reserve for N+1 backup) and recharges during `00:00–08:00` off-peak hours.
+   - Reduces monthly utility peak-demand charges (`$22.50 / kW-month` shaved) and performs daily TOU price arbitrage.
+2. **Chilled-Water Thermal Storage Pre-Cooling & Coasting ($P_{\text{thermal}, t}$)**:
+   - Pre-chills the secondary liquid loop and concrete slab during shoulder hours (`12:00–14:00`, `+38 kW`) and coasts during critical peak hours (`14:00–20:00`, `-28.5 kW` chiller compressor reduction):
+
+$$P_{\text{grid}, t}^{\text{opt}} = P_{\text{facility}, t}^{\text{base}} - \Delta P_{\text{PUE\_opt}, t} - P_{\text{BESS}, t} + P_{\text{thermal}, t}$$
+
 ---
 
 ## 5. Autonomous OpenRouter LLM Tool-Calling & GraphRAG Architecture
@@ -200,6 +213,8 @@ Implemented in [`frontend/src/components/DataHall3D.tsx`](file:///Users/pb/dctwi
 | `GET /api/opendt/calibration` | — | Returns `OpenDTCalibrationReport` (RLS/Kalman RMSE convergence, learned $R_{\text{th}}$, $C_{\text{th}}$, and UA fouling drift). |
 | `GET /api/mpc/policy` | — | Returns `MPCPolicyState` (30-min lookahead trajectory, CBF safety barriers, anti-hunting savings). |
 | `POST /api/graphrag/mop` | `MOPGenerationRequest` | Traverses `NetworkX` blast radius and generates a 5-phase `MOPDocumentResponse`. |
+| `GET /api/energy/grid` | — | Returns `EnergyGridManagementState` (5-way PUE power breakdown, 24h TOU tariff schedule, BESS peak-shaving kW, and annual OpEx savings). |
+| `POST /api/energy/dispatch` | `EnergyDispatchRequest` | Toggle UPS Li-Ion BESS peak-shaving, chilled-water thermal pre-cooling, and utility Critical-Peak Demand Response (`DR`) events. |
 | `POST /api/what-if` | `WhatIfRequest` | Clones the live twin and runs a counterfactual simulation (`WhatIfResponse`). |
 | `POST /api/copilot` | `AgentQueryRequest` | Executes the live OpenRouter/OpenAI tool-calling agent (or local multi-tool fallback). |
 | `GET / POST /api/llm/config` | `LLMProviderConfigRequest` | Get or update the active OpenRouter/OpenAI API key and model ID. |

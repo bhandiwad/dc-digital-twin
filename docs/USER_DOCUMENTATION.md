@@ -74,14 +74,18 @@ Use the **Top-Right Floating Scenario Bar** inside the 3D viewport to test how t
 
 ## 5. Using the 6-Tab Engineering Workbench
 
-### Tab 1: `ML / MOP` Suite (OpenDT Calibration, Constrained MPC & GraphRAG MOP)
-Operates **100% on facility sensors** without touching tenant servers:
-1. **`1. OpenDT RLS Calibration`**:
+### Tab 1: `ML / MOP` Suite (PUE & Grid BESS, OpenDT Calibration, Constrained MPC & GraphRAG MOP)
+Operates **100% on facility sensors & electrical/cooling infrastructure** without touching tenant servers:
+1. **`⚡ PUE & Grid BESS` (Default Sub-Tab)**:
+   - View the **5-way Real-Time PUE & Power Component Breakdown** (`IT Compute & GPUs`, `Chiller & Cooling Tower Plant`, `Perimeter CRAC VFD Fans`, `Liquid CDU Pumps`, and `UPS & PDU Transformer Losses`).
+   - Toggle **🔋 UPS-A/B Li-Ion BESS Peak Shaving**, **❄️ Chilled-Water Thermal Pre-Cool & Coast**, and **⚡ Simulate Utility Critical-Peak Demand Response (DR) Event (`$0.285/kWh`)** to watch peak grid import drop by **`-209 to -235 kW`** (`~$152,844/yr` in combined TOU + peak-demand charge savings).
+   - Inspect the **24-Hour Utility TOU Tariff, BESS Arbitrage & Thermal Pre-Cool Schedule** (`00:00` → `22:00`).
+2. **`OpenDT RLS`**:
    - View online Recursive Least Squares + Kalman Filter convergence (`Uncalibrated RMSE ±3.00°C` → `OpenDT RLS RMSE ±0.34°C`).
    - Inspect each zone's learned **Thermal Resistance ($R_{\text{th}}$)** and **UA Fouling Drift (%)**. Try injecting **`💧 CDU-1 Loop Fouling`** from the top bar and watch `ZONE-C` transition to `MAINTENANCE_REQUIRED` as its learned $R_{\text{th}}$ drifts upward.
-2. **`2. Constrained MPC / RL`**:
+3. **`MPC / Safe-RL`**:
    - Inspect the **30-Minute Lookahead Trajectory (`+0m` to `+30m`)** comparing **Reactive PID Inlet** vs. **Constrained MPC Inlet**, active **Control Barrier Functions (CBFs)**, and anti-hunting VFD power savings.
-3. **`3. GraphRAG SOP / MOP`**:
+4. **`GraphRAG MOP`**:
    - Choose any asset (`CDU-1`, `CDU-2`, `CRAC-2`, `CRAC-3`, `PDU-C`) and maintenance type (*Duplex Strainer Clean*, *VFD Replacement*, *Breaker Thermography*).
    - Review the `NetworkX` blast radius (`8 Racks`, `490+ kW` affected), required `T-15m` pre-cooling setpoints, and the 5-step LOTO execution checklist. Click **`Copy MOP (.md)`** to copy the full procedure document.
 
