@@ -24,10 +24,10 @@ if [ ! -d "$ROOT_DIR/frontend/dist" ]; then
   (cd "$ROOT_DIR/frontend" && npm install && npm run build)
 fi
 
-HOST="${HOST:-127.0.0.1}"
+BIND_HOST="${BIND_HOST:-127.0.0.1}"
 PORT="${PORT:-8000}"
 
 echo "Starting Pandita's Aether-DCTWIN: High-Density AI Data Center Digital Twin..."
-echo "Web UI & API available at: http://$HOST:$PORT"
+echo "Web UI & API available at: http://$BIND_HOST:$PORT"
 
-PYTHONPATH="$ROOT_DIR/backend" "$ROOT_DIR/.venv/bin/uvicorn" main:app --host "$HOST" --port "$PORT"
+PYTHONPATH="$ROOT_DIR/backend" "$ROOT_DIR/.venv/bin/uvicorn" main:app --host "$BIND_HOST" --port "$PORT"
