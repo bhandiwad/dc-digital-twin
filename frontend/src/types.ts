@@ -508,5 +508,42 @@ export interface MOPDocumentResponse {
   markdown_document: string;
 }
 
+// --- Upgrade 6: PUE, Grid Tariff, UPS BESS Peak-Shaving & Thermal Storage Energy Management ---
+
+export interface TariffPeriodWindow {
+  hour_label: string;
+  tariff_tier: string;
+  price_usd_per_kwh: number;
+  grid_carbon_g_per_kwh: number;
+  baseline_grid_draw_kw: number;
+  optimized_grid_draw_kw: number;
+  bess_discharge_kw: number;
+  thermal_precool_kw: number;
+  projected_pue: number;
+}
+
+export interface EnergyGridManagementState {
+  timestamp: number;
+  current_tariff_tier: string;
+  current_price_usd_per_kwh: number;
+  utility_transformer_limit_kw: number;
+  current_grid_import_kw: number;
+  optimized_grid_import_kw: number;
+  peak_demand_shaved_kw: number;
+  bess_mode: string;
+  ups_a_soc_pct: number;
+  ups_b_soc_pct: number;
+  bess_dispatch_kw: number;
+  thermal_storage_mode: string;
+  chilled_water_buffer_soc_pct: number;
+  demand_response_event_active: boolean;
+  daily_tou_cost_savings_usd: number;
+  monthly_demand_charge_savings_usd: number;
+  annual_total_energy_opex_savings_usd: number;
+  power_breakdown_kw: Record<string, number>;
+  schedule_24h: TariffPeriodWindow[];
+}
+
+
 
 

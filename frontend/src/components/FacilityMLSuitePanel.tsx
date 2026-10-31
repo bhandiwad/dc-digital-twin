@@ -17,26 +17,62 @@ import {
   OpenDTCalibrationReport,
   MPCPolicyState,
   MOPDocumentResponse,
+  EnergyGridManagementState,
 } from '../types';
 
 export const FacilityMLSuitePanel: React.FC = () => {
-  const [subTab, setSubTab] = useState<'opendt_rls' | 'mpc_lookahead' | 'graphrag_mop'>('opendt_rls');
+  const [subTab, setSubTab] = useState<'opendt_rls' | 'mpc_lookahead' | 'energy_grid' | 'graphrag_mop'>('energy_grid');
   const [calibration, setCalibration] = useState<OpenDTCalibrationReport | null>(null);
   const [mpcState, setMpcState] = useState<MPCPolicyState | null>(null);
+  const [energyState, setEnergyState] = useState<EnergyGridManagementState | null>(null);
   const [mopDoc, setMopDoc] = useState<MOPDocumentResponse | null>(null);
   const [mopTarget, setMopTarget] = useState<string>('CDU-1');
   const [mopType, setMopType] = useState<string>('strainer_swap');
   const [mopLoading, setMopLoading] = useState<boolean>(false);
   const [copiedMop, setCopiedMop] = useState<boolean>(false);
 
+  // Energy dispatch toggles
+  const [bessEnabled, setBessEnabled] = useState<boolean>(true);
+  const [precoolEnabled, setPrecoolEnabled] = useState<boolean>(true);
+  const [drEvent, setDrEvent] = useState<boolean>(false);
+
   const fetchSuiteData = async () => {
     try {
-      const [calRes, mpcRes] = await Promise.all([
+      const [calRes, mpcRes, engRes] = await Promise.all([
         fetch('/api/opendt/calibration'),
         fetch('/api/mpc/policy'),
+        fetch('/api/energy/grid'),
       ]);
       if (calRes.ok) setCalibration(await calRes.json());
       if (mpcRes.ok) setMpcState(await mpcRes.json());
+      if (engRes.ok) setEnergyState(await engRes.json());
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const updateEnergyDispatch = async (
+    nextBess: boolean,
+    nextPrecool: boolean,
+    nextDr: boolean
+  ) => {
+    setBessEnabled(nextBess);
+    setPrecoolEnabled(nextPrecool);
+    setDrEvent(nextDr);
+    try {
+      const res = await fetch('/api/energy/dispatch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bess_peak_shaving_enabled: nextBess,
+          thermal_precool_enabled: nextPrecool,
+          simulate_grid_dr_event: nextDr,
+          target_grid_cap_kw: 1220.0,
+        }),
+      });
+      if (res.ok) {
+        setEnergyState(await res.json());
+      }
     } catch (e) {
       console.error(e);
     }
@@ -78,39 +114,208 @@ export const FacilityMLSuitePanel: React.FC = () => {
 
   return (
     <div className="space-y-3">
-      {/* Sub-Navigation Pills for the 3 Facility-First AI Modules */}
-      <div className="grid grid-cols-3 gap-1 bg-slate-900/90 border border-slate-800 rounded-xl p-1">
+      {/* Sub-Navigation Pills for the 4 Facility-First AI & Energy Modules */}
+      <div className="grid grid-cols-4 gap-1 bg-slate-900/90 border border-slate-800 rounded-xl p-1">
+        <button
+          onClick={() => setSubTab('energy_grid')}
+          className={`py-1.5 px-1.5 rounded-lg text-[10px] font-bold transition-all ${
+            subTab === 'energy_grid'
+              ? 'bg-cyan-500 text-slate-950 shadow-sm'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          ⚡ PUE & Grid BESS
+        </button>
         <button
           onClick={() => setSubTab('opendt_rls')}
-          className={`py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all ${
+          className={`py-1.5 px-1.5 rounded-lg text-[10px] font-bold transition-all ${
             subTab === 'opendt_rls'
               ? 'bg-cyan-500 text-slate-950 shadow-sm'
               : 'text-slate-400 hover:text-slate-200'
           }`}
         >
-          1. OpenDT RLS Calibration
+          OpenDT RLS
         </button>
         <button
           onClick={() => setSubTab('mpc_lookahead')}
-          className={`py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all ${
+          className={`py-1.5 px-1.5 rounded-lg text-[10px] font-bold transition-all ${
             subTab === 'mpc_lookahead'
               ? 'bg-cyan-500 text-slate-950 shadow-sm'
               : 'text-slate-400 hover:text-slate-200'
           }`}
         >
-          2. Constrained MPC / RL
+          MPC / Safe-RL
         </button>
         <button
           onClick={() => setSubTab('graphrag_mop')}
-          className={`py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all ${
+          className={`py-1.5 px-1.5 rounded-lg text-[10px] font-bold transition-all ${
             subTab === 'graphrag_mop'
               ? 'bg-cyan-500 text-slate-950 shadow-sm'
               : 'text-slate-400 hover:text-slate-200'
           }`}
         >
-          3. GraphRAG SOP / MOP
+          GraphRAG MOP
         </button>
       </div>
+
+      {/* MODULE 0: PUE Decomposition, Utility TOU Tariff, UPS BESS Peak-Shaving & Thermal Storage */}
+      {subTab === 'energy_grid' && energyState && (
+        <div className="space-y-3">
+          <div className="bg-slate-900/95 border border-slate-800 rounded-xl p-3.5 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                  {energyState.current_tariff_tier} • ${energyState.current_price_usd_per_kwh.toFixed(3)}/kWh
+                </span>
+                <h3 className="text-xs font-bold text-white mt-1">
+                  PUE Decomposition, BESS Peak-Shaving & Thermal Storage
+                </h3>
+              </div>
+              <div className="text-right font-mono">
+                <div className="text-[10px] text-slate-400">Peak Shaved</div>
+                <div className="text-sm font-bold text-emerald-400">
+                  -{energyState.peak_demand_shaved_kw.toFixed(0)} kW
+                </div>
+              </div>
+            </div>
+
+            {/* 3 Headline Financial & Grid Import KPIs */}
+            <div className="grid grid-cols-3 gap-2 text-center font-mono">
+              <div className="bg-slate-950/85 border border-slate-800 rounded-lg p-2">
+                <div className="text-[10px] text-slate-400">Grid Import (Cap 1600kW)</div>
+                <div className="text-xs font-bold text-white">
+                  {energyState.current_grid_import_kw.toFixed(0)} →{' '}
+                  <span className="text-cyan-400">{energyState.optimized_grid_import_kw.toFixed(0)} kW</span>
+                </div>
+              </div>
+              <div className="bg-slate-950/85 border border-slate-800 rounded-lg p-2">
+                <div className="text-[10px] text-slate-400">Demand Charge Cut</div>
+                <div className="text-xs font-bold text-emerald-400">
+                  ${energyState.monthly_demand_charge_savings_usd.toLocaleString()}/mo
+                </div>
+              </div>
+              <div className="bg-slate-950/85 border border-slate-800 rounded-lg p-2">
+                <div className="text-[10px] text-slate-400">Annual Energy OpEx Cut</div>
+                <div className="text-xs font-bold text-cyan-300">
+                  ${energyState.annual_total_energy_opex_savings_usd.toLocaleString()}/yr
+                </div>
+              </div>
+            </div>
+
+            {/* Interactive Dispatch Controls: UPS BESS Peak Shaving + Chilled Water Thermal Pre-Cooling + Grid DR */}
+            <div className="bg-slate-950/90 border border-slate-800 rounded-lg p-2.5 space-y-2 text-xs">
+              <div className="text-[10px] font-mono uppercase text-cyan-300 font-semibold">
+                Active Energy & Demand-Response Dispatch Controls:
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="flex items-center justify-between cursor-pointer">
+                  <span className="text-slate-300">
+                    🔋 UPS-A/B Li-Ion BESS Peak Shaving ({energyState.bess_dispatch_kw.toFixed(0)} kW | SOC {energyState.ups_a_soc_pct}%)
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={bessEnabled}
+                    onChange={(e) => updateEnergyDispatch(e.target.checked, precoolEnabled, drEvent)}
+                    className="accent-cyan-400"
+                  />
+                </label>
+                <label className="flex items-center justify-between cursor-pointer">
+                  <span className="text-slate-300">
+                    ❄️ Chilled-Water Thermal Pre-Cool & Coast (Buffer {energyState.chilled_water_buffer_soc_pct}%)
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={precoolEnabled}
+                    onChange={(e) => updateEnergyDispatch(bessEnabled, e.target.checked, drEvent)}
+                    className="accent-cyan-400"
+                  />
+                </label>
+                <label className="flex items-center justify-between cursor-pointer">
+                  <span className="text-amber-300 font-medium">
+                    ⚡ Simulate Utility Critical-Peak Demand Response (DR) Event ($0.285/kWh)
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={drEvent}
+                    onChange={(e) => updateEnergyDispatch(bessEnabled, precoolEnabled, e.target.checked)}
+                    className="accent-amber-400"
+                  />
+                </label>
+              </div>
+            </div>
+
+            {/* Real-Time PUE Power Breakdown Bar */}
+            <div className="bg-slate-950/90 border border-slate-800 rounded-lg p-2.5 space-y-1.5">
+              <div className="text-[10px] font-mono uppercase text-slate-400">
+                Real-Time Facility Power & PUE Component Breakdown:
+              </div>
+              {Object.entries(energyState.power_breakdown_kw).map(([label, kw]) => {
+                const pct = Math.min(100, (kw / Math.max(energyState.current_grid_import_kw, 1)) * 100);
+                return (
+                  <div key={label} className="space-y-0.5 text-[11px] font-mono">
+                    <div className="flex justify-between">
+                      <span className="text-slate-300 font-sans">{label}</span>
+                      <span className="text-white font-bold">
+                        {kw.toFixed(1)} kW ({pct.toFixed(1)}%)
+                      </span>
+                    </div>
+                    <div className="w-full h-1.5 bg-slate-900 rounded overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-cyan-500 to-indigo-500"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 24-Hour Time-of-Use (TOU) Tariff & BESS / Pre-Cool Schedule */}
+            <div>
+              <div className="text-[10px] font-mono uppercase text-slate-400 mb-1">
+                24-Hour Utility TOU Tariff, BESS Arbitrage & Thermal Pre-Cool Schedule:
+              </div>
+              <div className="max-h-[165px] overflow-y-auto space-y-1 pr-1 font-mono text-[10px]">
+                {energyState.schedule_24h.map((slot) => (
+                  <div
+                    key={slot.hour_label}
+                    className="grid grid-cols-5 items-center bg-slate-950/85 border border-slate-800/80 rounded px-2 py-1"
+                  >
+                    <span className="font-bold text-white">{slot.hour_label}</span>
+                    <span
+                      className={
+                        slot.tariff_tier.includes('CRITICAL')
+                          ? 'text-red-400 font-bold'
+                          : slot.tariff_tier.includes('OFF_PEAK')
+                          ? 'text-emerald-400'
+                          : 'text-amber-300'
+                      }
+                    >
+                      ${slot.price_usd_per_kwh.toFixed(3)}
+                    </span>
+                    <span className="text-slate-300">
+                      {slot.baseline_grid_draw_kw.toFixed(0)}→
+                      <strong className="text-cyan-300">{slot.optimized_grid_draw_kw.toFixed(0)}kW</strong>
+                    </span>
+                    <span
+                      className={
+                        slot.bess_discharge_kw > 0
+                          ? 'text-emerald-400'
+                          : slot.bess_discharge_kw < 0
+                          ? 'text-indigo-300'
+                          : 'text-slate-500'
+                      }
+                    >
+                      BESS {slot.bess_discharge_kw > 0 ? `-${slot.bess_discharge_kw}kW` : slot.bess_discharge_kw < 0 ? `+${Math.abs(slot.bess_discharge_kw)}kW` : '0'}
+                    </span>
+                    <span className="text-right text-white">PUE {slot.projected_pue.toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODULE 1: OpenDT Online Self-Calibration (Recursive Least Squares + Extended Kalman Filter) */}
       {subTab === 'opendt_rls' && calibration && (

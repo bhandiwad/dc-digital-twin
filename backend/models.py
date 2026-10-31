@@ -613,4 +613,48 @@ class MOPDocumentResponse(BaseModel):
     markdown_document: str
 
 
+# --- Upgrade 6: PUE, Grid Tariff, UPS BESS Peak-Shaving & Thermal Storage Energy Management ---
+
+class TariffPeriodWindow(BaseModel):
+    hour_label: str
+    tariff_tier: str  # "OFF_PEAK" | "SHOULDER" | "CRITICAL_PEAK"
+    price_usd_per_kwh: float
+    grid_carbon_g_per_kwh: float
+    baseline_grid_draw_kw: float
+    optimized_grid_draw_kw: float
+    bess_discharge_kw: float  # >0 discharging UPS BESS to shave peak, <0 charging off-peak
+    thermal_precool_kw: float  # >0 pre-cooling water loop before peak, <0 coasting during peak
+    projected_pue: float
+
+
+class EnergyGridManagementState(BaseModel):
+    timestamp: float
+    current_tariff_tier: str
+    current_price_usd_per_kwh: float
+    utility_transformer_limit_kw: float = 1600.0
+    current_grid_import_kw: float
+    optimized_grid_import_kw: float
+    peak_demand_shaved_kw: float
+    bess_mode: str  # "PEAK_SHAVING_DISCHARGE" | "OFF_PEAK_RECHARGE" | "STANDBY_RESERVE"
+    ups_a_soc_pct: float
+    ups_b_soc_pct: float
+    bess_dispatch_kw: float
+    thermal_storage_mode: str  # "PRE_COOL_CHARGING" | "THERMAL_COAST_DISCHARGE" | "NOMINAL"
+    chilled_water_buffer_soc_pct: float
+    demand_response_event_active: bool
+    daily_tou_cost_savings_usd: float
+    monthly_demand_charge_savings_usd: float
+    annual_total_energy_opex_savings_usd: float
+    power_breakdown_kw: Dict[str, float]
+    schedule_24h: List[TariffPeriodWindow]
+
+
+class EnergyDispatchRequest(BaseModel):
+    bess_peak_shaving_enabled: bool = True
+    thermal_precool_enabled: bool = True
+    simulate_grid_dr_event: bool = False
+    target_grid_cap_kw: float = 1250.0
+
+
+
 

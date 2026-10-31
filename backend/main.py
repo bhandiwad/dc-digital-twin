@@ -44,6 +44,8 @@ from models import (
     MOPGenerationRequest,
     MOPDocumentResponse,
     LLMProviderConfigRequest,
+    EnergyGridManagementState,
+    EnergyDispatchRequest,
 )
 from simulator import DataHallTwinEngine
 from ai_engine import DataCenterAIService
@@ -317,6 +319,18 @@ def get_mpc_policy_state() -> MPCPolicyState:
 @app.post("/api/graphrag/mop", response_model=MOPDocumentResponse)
 def generate_facility_mop(req: MOPGenerationRequest) -> MOPDocumentResponse:
     return ai_service.generate_graphrag_mop(twin_engine, req)
+
+
+# --- Upgrade 6 Endpoints: PUE, Grid Tariff, UPS BESS Peak-Shaving & Thermal Energy Management ---
+
+@app.get("/api/energy/grid", response_model=EnergyGridManagementState)
+def get_energy_grid_state() -> EnergyGridManagementState:
+    return ai_service.compute_energy_grid_management(twin_engine)
+
+
+@app.post("/api/energy/dispatch", response_model=EnergyGridManagementState)
+def update_energy_dispatch_controls(req: EnergyDispatchRequest) -> EnergyGridManagementState:
+    return ai_service.update_energy_dispatch(twin_engine, req)
 
 
 @app.websocket("/ws/telemetry")

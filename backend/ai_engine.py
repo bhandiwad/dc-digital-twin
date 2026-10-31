@@ -38,6 +38,9 @@ from models import (
     MOPGenerationRequest,
     MOPStepItem,
     MOPDocumentResponse,
+    TariffPeriodWindow,
+    EnergyGridManagementState,
+    EnergyDispatchRequest,
 )
 from simulator import DataHallTwinEngine
 from llm_agent import LiveLLMConfigManager, call_openrouter_or_openai_with_tools
@@ -51,6 +54,10 @@ class DataCenterAIService:
             random_state=42,
         )
         self.llm_config = LiveLLMConfigManager()
+        self.bess_peak_shaving_enabled: bool = True
+        self.thermal_precool_enabled: bool = True
+        self.simulate_grid_dr_event: bool = False
+        self.target_grid_cap_kw: float = 1220.0
         self._fit_baseline_detector()
 
     def _fit_baseline_detector(self) -> None:
@@ -1217,5 +1224,151 @@ class DataCenterAIService:
             steps=steps,
             markdown_document=md_doc,
         )
+
+    def update_energy_dispatch(
+        self, engine: DataHallTwinEngine, req: EnergyDispatchRequest
+    ) -> EnergyGridManagementState:
+        """Update Grid Tariff / BESS Peak-Shaving / Thermal Pre-Cooling dispatch controls and apply to live twin."""
+        self.bess_peak_shaving_enabled = req.bess_peak_shaving_enabled
+        self.thermal_precool_enabled = req.thermal_precool_enabled
+        self.simulate_grid_dr_event = req.simulate_grid_dr_event
+        self.target_grid_cap_kw = req.target_grid_cap_kw
+
+        if req.thermal_precool_enabled:
+            engine.auto_optimize = True
+        if req.bess_peak_shaving_enabled:
+            engine.ups_units["UPS-A"].battery_soc_pct = 86.4
+            engine.ups_units["UPS-B"].battery_soc_pct = 88.2
+        else:
+            engine.ups_units["UPS-A"].battery_soc_pct = 100.0
+            engine.ups_units["UPS-B"].battery_soc_pct = 100.0
+
+        engine.step(dt_sec=1.5)
+        return self.compute_energy_grid_management(engine)
+
+    def compute_energy_grid_management(
+        self, engine: DataHallTwinEngine
+    ) -> EnergyGridManagementState:
+        """
+        Compute end-to-end PUE, Utility Time-of-Use (TOU) Tariff Optimization, UPS Li-Ion BESS Peak-Demand Shaving,
+        and Chilled-Water Thermal Storage Pre-Cooling across a 24-hour horizon.
+        """
+        m = engine.history[-1]
+        opt = self.compute_optimization(engine)
+
+        # Breakdown of facility electrical draw
+        it_kw = m.total_it_power_kw
+        crac_fan_kw = round(sum(c.power_kw for c in engine.cracs.values()), 1)
+        cdu_pump_kw = round(sum(c.power_kw for c in engine.cdus.values()), 1)
+        chiller_tower_kw = round(max(15.0, m.total_cooling_power_kw - crac_fan_kw - cdu_pump_kw), 1)
+        pdu_ups_loss_kw = m.total_power_loss_kw
+
+        power_breakdown = {
+            "IT Compute & GPUs (32 Racks)": round(it_kw, 1),
+            "Chiller & Cooling Tower Plant": chiller_tower_kw,
+            "Perimeter CRAC VFD Fans (1–4)": crac_fan_kw,
+            "Liquid CDU Pumps (CDU 1–2)": cdu_pump_kw,
+            "UPS & PDU Transformer Losses": round(pdu_ups_loss_kw, 1),
+        }
+
+        # Current tariff state (Critical Peak if DR event is simulated, otherwise Afternoon Peak)
+        if self.simulate_grid_dr_event:
+            current_tier = "CRITICAL_PEAK (GRID DR EVENT)"
+            current_price = 0.285
+        else:
+            current_tier = "PEAK_TOU (14:00–19:00)"
+            current_price = 0.185
+
+        raw_facility_kw = m.total_facility_power_kw
+        pue_cooling_saved_kw = opt.power_saved_kw if self.thermal_precool_enabled else 0.0
+        thermal_coast_kw = 28.5 if self.thermal_precool_enabled else 0.0
+        bess_dispatch_kw = 115.0 if self.bess_peak_shaving_enabled else 0.0
+        if self.simulate_grid_dr_event and self.bess_peak_shaving_enabled:
+            bess_dispatch_kw = 165.0
+
+        optimized_grid_kw = round(
+            max(820.0, raw_facility_kw - pue_cooling_saved_kw - thermal_coast_kw - bess_dispatch_kw), 1
+        )
+        peak_shaved_kw = round(raw_facility_kw - optimized_grid_kw, 1)
+
+        # Build 24-hour 2-hour block TOU & BESS/Thermal schedule (12 blocks)
+        schedule: List[TariffPeriodWindow] = []
+        hours = ["00:00", "02:00", "04:00", "06:00", "08:00", "10:00", "12:00", "14:00", "16:00", "18:00", "20:00", "22:00"]
+        for idx, h_lbl in enumerate(hours):
+            hr = idx * 2
+            wave = math.sin((hr - 8.0) * math.pi / 12.0)
+            base_draw = round(raw_facility_kw + 95.0 * wave, 1)
+
+            if 0 <= hr < 8:
+                tier = "OFF_PEAK"
+                price = 0.068
+                carbon = 245.0
+                bess_kw = -45.0 if self.bess_peak_shaving_enabled else 0.0  # recharging BESS at $0.068/kWh
+                precool_kw = 0.0
+            elif 12 <= hr < 14:
+                tier = "SHOULDER (PRE-COOL)"
+                price = 0.112
+                carbon = 295.0
+                bess_kw = 0.0
+                precool_kw = 38.0 if self.thermal_precool_enabled else 0.0  # pre-chilling water loop before 14:00 peak
+            elif 14 <= hr < 20:
+                tier = "CRITICAL_PEAK"
+                price = 0.245 if self.simulate_grid_dr_event else 0.185
+                carbon = 365.0
+                bess_kw = bess_dispatch_kw
+                precool_kw = -thermal_coast_kw  # thermal coasting cuts chiller compressor draw during peak
+            else:
+                tier = "SHOULDER"
+                price = 0.115
+                carbon = 305.0
+                bess_kw = 0.0
+                precool_kw = 0.0
+
+            opt_draw = round(base_draw - (pue_cooling_saved_kw * 0.85) - bess_kw + precool_kw, 1)
+            proj_pue = round(max(1.11, m.pue - (0.045 if self.thermal_precool_enabled else 0.0) + 0.015 * wave), 3)
+
+            schedule.append(
+                TariffPeriodWindow(
+                    hour_label=h_lbl,
+                    tariff_tier=tier,
+                    price_usd_per_kwh=price,
+                    grid_carbon_g_per_kwh=carbon,
+                    baseline_grid_draw_kw=base_draw,
+                    optimized_grid_draw_kw=opt_draw,
+                    bess_discharge_kw=bess_kw,
+                    thermal_precool_kw=precool_kw,
+                    projected_pue=proj_pue,
+                )
+            )
+
+        # Financial calculations:
+        # 1. Monthly Utility Peak Demand Charge (~$22.50 / kW-month shaved)
+        monthly_demand_savings = round(peak_shaved_kw * 22.50, 0)
+        # 2. Daily TOU Arbitrage + PUE kWh Reduction
+        daily_tou_savings = round((pue_cooling_saved_kw * 24.0 * 0.125) + (bess_dispatch_kw * 5.0 * (0.185 - 0.068)), 0)
+        annual_total_savings = round(daily_tou_savings * 365.0 + monthly_demand_savings * 12.0, 0)
+
+        return EnergyGridManagementState(
+            timestamp=m.timestamp,
+            current_tariff_tier=current_tier,
+            current_price_usd_per_kwh=current_price,
+            utility_transformer_limit_kw=1600.0,
+            current_grid_import_kw=round(raw_facility_kw, 1),
+            optimized_grid_import_kw=optimized_grid_kw,
+            peak_demand_shaved_kw=peak_shaved_kw,
+            bess_mode="PEAK_SHAVING_DISCHARGE" if self.bess_peak_shaving_enabled else "STANDBY_RESERVE (100% SOC)",
+            ups_a_soc_pct=engine.ups_units["UPS-A"].battery_soc_pct,
+            ups_b_soc_pct=engine.ups_units["UPS-B"].battery_soc_pct,
+            bess_dispatch_kw=bess_dispatch_kw,
+            thermal_storage_mode="THERMAL_COAST_DISCHARGE" if self.thermal_precool_enabled else "NOMINAL_PID",
+            chilled_water_buffer_soc_pct=78.5 if self.thermal_precool_enabled else 45.0,
+            demand_response_event_active=self.simulate_grid_dr_event,
+            daily_tou_cost_savings_usd=daily_tou_savings,
+            monthly_demand_charge_savings_usd=monthly_demand_savings,
+            annual_total_energy_opex_savings_usd=annual_total_savings,
+            power_breakdown_kw=power_breakdown,
+            schedule_24h=schedule,
+        )
+
 
 
