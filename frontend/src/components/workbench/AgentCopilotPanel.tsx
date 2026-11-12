@@ -12,6 +12,60 @@ export interface CopilotMessageItem {
   suggestions?: string[];
 }
 
+function renderInlineTokens(line: string): React.ReactNode[] {
+  const parts = line.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+  return parts.map((part, idx) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return (
+        <strong key={idx} className="font-semibold text-white">
+          {part.slice(2, -2).replace(/`/g, '')}
+        </strong>
+      );
+    }
+    if (part.startsWith('`') && part.endsWith('`')) {
+      return (
+        <span
+          key={idx}
+          className="px-1.5 py-0.5 rounded bg-slate-800/90 text-sky-300 font-mono text-[11px]"
+        >
+          {part.slice(1, -1)}
+        </span>
+      );
+    }
+    return <React.Fragment key={idx}>{part}</React.Fragment>;
+  });
+}
+
+function renderFormattedMessage(text: string): React.ReactNode {
+  const lines = text.split('\n');
+  return (
+    <div className="space-y-1.5">
+      {lines.map((raw, i) => {
+        const line = raw.trimEnd();
+        if (!line.trim()) return <div key={i} className="h-1" />;
+        if (/^#{1,3}\s+/.test(line)) {
+          const heading = line.replace(/^#{1,3}\s+/, '');
+          return (
+            <div key={i} className="font-semibold text-white text-[13px] pt-0.5">
+              {renderInlineTokens(heading)}
+            </div>
+          );
+        }
+        if (/^[-*]\s+/.test(line)) {
+          const item = line.replace(/^[-*]\s+/, '');
+          return (
+            <div key={i} className="flex items-start gap-2">
+              <span className="text-sky-400 mt-0.5">•</span>
+              <span className="flex-1">{renderInlineTokens(item)}</span>
+            </div>
+          );
+        }
+        return <div key={i}>{renderInlineTokens(line)}</div>;
+      })}
+    </div>
+  );
+}
+
 export interface AgentCopilotPanelProps {
   messages: CopilotMessageItem[];
   copilotInput: string;
@@ -151,13 +205,13 @@ export const AgentCopilotPanel: React.FC<AgentCopilotPanelProps> = ({
             )}
 
             <div
-              className={`p-3.5 rounded-xl text-xs leading-relaxed whitespace-pre-line ${
+              className={`p-3.5 rounded-xl text-xs leading-relaxed ${
                 m.role === 'user'
-                  ? 'bg-sky-500/15 border border-sky-500/30 text-sky-100 ml-8'
+                  ? 'bg-sky-500/15 border border-sky-500/30 text-sky-100 ml-8 whitespace-pre-line'
                   : 'bg-slate-900/60 border border-slate-800 text-slate-200'
               }`}
             >
-              {m.text}
+              {m.role === 'assistant' ? renderFormattedMessage(m.text) : m.text}
             </div>
 
             {m.suggestions && m.suggestions.length > 0 && (

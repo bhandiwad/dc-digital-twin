@@ -11,6 +11,15 @@ Designed strictly around the real-world **Critical Facilities vs. Tenant IT dema
 
 ---
 
+## Executive Deck, PDFs & Live Demo Playbook
+
+- **[Pandita AI — AI for Data Centres (Updated Platform Deck)](docs/Pandita_AI_for_Data_Centres_Updated_Deck.pdf)** — 14-slide widescreen presentation combining Pandita AI's data centre strategy with live product screenshots across cooling, 10k-GPU planning, predictive maintenance, fault triage, Copilot, and ROI.
+- **[Master 6-Act Live Demo Playbook (`docs/DEMO_PLAYBOOK.md`)](docs/DEMO_PLAYBOOK.md)** — Click-by-click speaker walkthrough and plain-English talking tracks for customer and executive demos.
+- **[Simple 2-Page Product Overview (`docs/Aether_DCTWIN_Simple_Overview.pdf`)](docs/Aether_DCTWIN_Simple_Overview.pdf)** — Concise non-technical summary of business outcomes and facility-side safety.
+- **[2-Page Technology Stack Reference (`docs/Aether_DCTWIN_Technology_Stack.pdf`)](docs/Aether_DCTWIN_Technology_Stack.pdf)** — Breakdown of the 3D WebGL frontend, FastAPI/DuckDB backend, physics & SciPy solvers, and OT protocol boundary.
+
+---
+
 ## New Team Members: Start Here!
 
 Assigning or picking up one of the Feature Specification PRs (`PRD-01` through `PRD-10`)? Read these three guides first (no prior HVAC or electrical background required):
