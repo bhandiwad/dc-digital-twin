@@ -2,31 +2,44 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Custom scrollbars */
+@layer base {
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Subtle modern scrollbars */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.5);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(51, 65, 85, 0.8);
-  border-radius: 3px;
+  background: rgba(100, 116, 139, 0.35);
+  border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(6, 182, 212, 0.6);
+  background: rgba(100, 116, 139, 0.6);
 }
 
 /* Clean Enterprise Light Mode Theme Override */
 html.light-theme body {
-  background-color: #f1f5f9 !important;
+  background-color: #f8fafc !important;
   color: #0f172a !important;
 }
 
+html.light-theme .bg-\[\#090d16\],
 html.light-theme .bg-\[\#060a12\],
 html.light-theme .bg-\[\#080f1d\],
 html.light-theme .bg-\[\#070d19\] {
@@ -41,7 +54,7 @@ html.light-theme .bg-slate-950\/85,
 html.light-theme .bg-slate-950\/80,
 html.light-theme .bg-slate-950\/75,
 html.light-theme .bg-slate-950\/70 {
-  background-color: rgba(255, 255, 255, 0.94) !important;
+  background-color: rgba(255, 255, 255, 0.96) !important;
   color: #0f172a !important;
 }
 
@@ -50,18 +63,30 @@ html.light-theme .bg-slate-900\/95,
 html.light-theme .bg-slate-900\/90,
 html.light-theme .bg-slate-900\/85,
 html.light-theme .bg-slate-900\/70,
-html.light-theme .bg-slate-900\/60 {
+html.light-theme .bg-slate-900\/60,
+html.light-theme .bg-slate-900\/50,
+html.light-theme .bg-slate-900\/40 {
   background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+html.light-theme .bg-slate-800\/60,
+html.light-theme .bg-slate-800\/50,
+html.light-theme .bg-slate-800 {
+  background-color: #e2e8f0 !important;
   color: #0f172a !important;
 }
 
 html.light-theme .border-slate-800,
 html.light-theme .border-slate-800\/90,
 html.light-theme .border-slate-800\/80,
+html.light-theme .border-slate-800\/70,
+html.light-theme .border-slate-800\/60,
 html.light-theme .border-slate-700,
 html.light-theme .border-slate-700\/90,
-html.light-theme .border-slate-700\/80 {
-  border-color: #cbd5e1 !important;
+html.light-theme .border-slate-700\/80,
+html.light-theme .border-slate-700\/60 {
+  border-color: #e2e8f0 !important;
 }
 
 html.light-theme .text-white,
@@ -74,12 +99,14 @@ html.light-theme .text-slate-300 {
   color: #334155 !important;
 }
 
-html.light-theme .text-slate-400 {
-  color: #475569 !important;
+html.light-theme .text-slate-400,
+html.light-theme .text-slate-500 {
+  color: #64748b !important;
 }
 
 html.light-theme .text-cyan-300,
-html.light-theme .text-cyan-400 {
+html.light-theme .text-cyan-400,
+html.light-theme .text-sky-400 {
   color: #0284c7 !important;
 }
 
@@ -98,8 +125,3 @@ html.light-theme .text-indigo-200,
 html.light-theme .text-indigo-300 {
   color: #4f46e5 !important;
 }
-
-html.light-theme .text-purple-300 {
-  color: #7c3aed !important;
-}
-

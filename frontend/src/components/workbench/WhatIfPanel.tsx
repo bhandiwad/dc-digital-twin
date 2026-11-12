@@ -21,24 +21,28 @@ export const WhatIfPanel: React.FC<WhatIfPanelProps> = ({
 }) => {
   const rowIds = Array.from(new Set(racks.map((r) => r.row_id))).sort();
   const liquidRow =
-    racks.find((r) => r.cooling_type === 'hybrid_liquid')?.row_id || rowIds[rowIds.length - 1] || 'ROW-A';
+    racks.find((r) => r.cooling_type === 'hybrid_liquid')?.row_id ||
+    rowIds[rowIds.length - 1] ||
+    'ROW-A';
   const airRow = racks.find((r) => r.cooling_type === 'air')?.row_id || rowIds[0] || 'ROW-A';
 
   return (
     <div className="space-y-4">
-      <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-3">
+      <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 space-y-3.5">
         <div className="flex items-center justify-between">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-1.5">
-            <Play className="w-3.5 h-3.5 text-cyan-400" /> Counterfactual "What-If" Sandbox
-          </h3>
-          <span className="text-[10px] font-mono text-slate-400">Non-destructive clone</span>
+          <div>
+            <h3 className="text-sm font-semibold text-white">Capacity & Retrofit Sandbox</h3>
+            <p className="text-[11px] text-slate-400">
+              Test rack additions or liquid cooling upgrades safely offline
+            </p>
+          </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-1.5">
+        <div className="grid grid-cols-2 gap-2">
           <button
             onClick={() => {
               const preset: WhatIfRequest = {
-                name: `+160 kW High-Density AI Expansion in ${liquidRow}`,
+                name: `+160 kW High-Density Expansion in ${liquidRow}`,
                 target_row: liquidRow,
                 add_gpu_load_kw: 160,
                 convert_air_to_liquid: false,
@@ -53,14 +57,14 @@ export const WhatIfPanel: React.FC<WhatIfPanelProps> = ({
               onChangeReq(preset);
               onRunWhatIf(preset);
             }}
-            className="text-left p-2 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 text-[11px] text-cyan-300 font-medium"
+            className="text-left px-3 py-2 rounded-lg bg-slate-950/70 hover:bg-slate-800/80 border border-slate-800 text-xs text-slate-200 font-medium transition-colors"
           >
-            🚀 +160kW AI Load ({liquidRow})
+            +160 kW in {liquidRow}
           </button>
           <button
             onClick={() => {
               const preset: WhatIfRequest = {
-                name: `Retrofit ${airRow} Air Racks to Direct-to-Chip Liquid`,
+                name: `Convert ${airRow} to Direct Liquid +80 kW`,
                 target_row: airRow,
                 add_gpu_load_kw: 80,
                 convert_air_to_liquid: true,
@@ -75,19 +79,19 @@ export const WhatIfPanel: React.FC<WhatIfPanelProps> = ({
               onChangeReq(preset);
               onRunWhatIf(preset);
             }}
-            className="text-left p-2 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 text-[11px] text-emerald-300 font-medium"
+            className="text-left px-3 py-2 rounded-lg bg-slate-950/70 hover:bg-slate-800/80 border border-slate-800 text-xs text-slate-200 font-medium transition-colors"
           >
-            💧 Retrofit {airRow} to Liquid +80kW
+            Convert {airRow} to Liquid
           </button>
         </div>
 
-        <div className="space-y-2.5 text-xs pt-1">
+        <div className="space-y-3 text-xs pt-0.5 tabular-nums">
           <div className="flex items-center justify-between">
             <span className="text-slate-400">Target Row</span>
             <select
               value={whatIfReq.target_row}
               onChange={(e) => onChangeReq({ ...whatIfReq, target_row: e.target.value })}
-              className="bg-slate-950 border border-slate-700 rounded px-2 py-1 font-mono text-xs text-white"
+              className="bg-slate-950 border border-slate-700/80 rounded-lg px-2.5 py-1.5 text-xs text-white"
             >
               {rowIds.map((rid) => {
                 const sampleRack = racks.find((r) => r.row_id === rid);
@@ -102,9 +106,9 @@ export const WhatIfPanel: React.FC<WhatIfPanelProps> = ({
           </div>
 
           <div>
-            <div className="flex justify-between font-mono text-[11px]">
-              <span className="text-slate-400">Add / Remove Row IT Load</span>
-              <span className="text-cyan-300 font-bold">
+            <div className="flex justify-between text-xs mb-1">
+              <span className="text-slate-400">Row IT Power Change</span>
+              <span className="text-sky-400 font-semibold">
                 {whatIfReq.add_gpu_load_kw >= 0
                   ? `+${whatIfReq.add_gpu_load_kw}`
                   : whatIfReq.add_gpu_load_kw}{' '}
@@ -120,14 +124,16 @@ export const WhatIfPanel: React.FC<WhatIfPanelProps> = ({
               onChange={(e) =>
                 onChangeReq({ ...whatIfReq, add_gpu_load_kw: parseFloat(e.target.value) })
               }
-              className="w-full accent-cyan-400 mt-1"
+              className="w-full accent-sky-500"
             />
           </div>
 
           <div>
-            <div className="flex justify-between font-mono text-[11px]">
-              <span className="text-slate-400">CDU Liquid Supply Setpoint</span>
-              <span className="text-white">{(whatIfReq.cdu_setpoint_c ?? 24).toFixed(1)}°C</span>
+            <div className="flex justify-between text-xs mb-1">
+              <span className="text-slate-400">Liquid Supply Temp</span>
+              <span className="text-white font-medium">
+                {(whatIfReq.cdu_setpoint_c ?? 24).toFixed(1)}°C
+              </span>
             </div>
             <input
               type="range"
@@ -138,76 +144,73 @@ export const WhatIfPanel: React.FC<WhatIfPanelProps> = ({
               onChange={(e) =>
                 onChangeReq({ ...whatIfReq, cdu_setpoint_c: parseFloat(e.target.value) })
               }
-              className="w-full accent-cyan-400 mt-1"
+              className="w-full accent-sky-500"
             />
           </div>
 
-          <div className="flex items-center justify-between pt-1">
-            <label className="flex items-center gap-2 text-slate-300 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={whatIfReq.convert_air_to_liquid}
-                onChange={(e) =>
-                  onChangeReq({ ...whatIfReq, convert_air_to_liquid: e.target.checked })
-                }
-                className="accent-cyan-400"
-              />
-              <span>Convert Target Row to Direct Liquid Cooling</span>
-            </label>
-          </div>
+          <label className="flex items-center justify-between bg-slate-950/60 border border-slate-800/80 rounded-lg px-3 py-2 cursor-pointer">
+            <span className="text-slate-200">Retrofit row to direct liquid cooling</span>
+            <input
+              type="checkbox"
+              checked={whatIfReq.convert_air_to_liquid}
+              onChange={(e) =>
+                onChangeReq({ ...whatIfReq, convert_air_to_liquid: e.target.checked })
+              }
+              className="accent-sky-500 w-4 h-4"
+            />
+          </label>
 
           <button
             onClick={() => onRunWhatIf()}
             disabled={whatIfLoading}
-            className="w-full py-2 mt-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs transition-all"
+            className="w-full py-2.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors"
           >
-            {whatIfLoading
-              ? 'Solving Coupled Electro-Thermal State...'
-              : 'Run Counterfactual Simulation'}
+            <Play className="w-3.5 h-3.5 fill-current" />
+            <span>{whatIfLoading ? 'Running Simulation...' : 'Run Simulation'}</span>
           </button>
         </div>
       </div>
 
       {whatIfResult && (
-        <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-white">{whatIfResult.scenario_name}</span>
+        <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold text-white">{whatIfResult.scenario_name}</span>
             <span
-              className={`text-[10px] font-mono uppercase px-2 py-0.5 rounded font-bold ${
+              className={`text-[11px] px-2.5 py-0.5 rounded-full font-medium capitalize shrink-0 ${
                 whatIfResult.risk_level === 'critical'
-                  ? 'bg-red-950 text-red-300 border border-red-500/60'
+                  ? 'bg-red-500/15 text-red-300'
                   : whatIfResult.risk_level === 'warning'
-                  ? 'bg-amber-950 text-amber-300 border border-amber-500/60'
-                  : 'bg-emerald-950 text-emerald-300 border border-emerald-500/60'
+                  ? 'bg-amber-500/15 text-amber-300'
+                  : 'bg-emerald-500/15 text-emerald-300'
               }`}
             >
-              Risk: {whatIfResult.risk_level}
+              {whatIfResult.risk_level} risk
             </span>
           </div>
 
-          <p className="text-[11px] text-slate-300 leading-relaxed">{whatIfResult.summary}</p>
+          <p className="text-xs text-slate-300 leading-relaxed">{whatIfResult.summary}</p>
 
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 tabular-nums">
             {whatIfResult.metrics_comparison.map((mc, idx) => (
               <div
                 key={idx}
-                className="flex items-center justify-between text-xs font-mono bg-slate-950/75 px-2.5 py-1.5 rounded border border-slate-800/80"
+                className="flex items-center justify-between text-xs bg-slate-950/70 px-3 py-2 rounded-lg border border-slate-800/80"
               >
-                <span className="text-slate-400 font-sans">{mc.metric}</span>
+                <span className="text-slate-400">{mc.metric}</span>
                 <div className="flex items-center gap-2">
                   <span className="text-slate-400">{mc.baseline}</span>
                   <span className="text-slate-600">→</span>
-                  <span className="text-white font-bold">
+                  <span className="text-white font-semibold">
                     {mc.projected} {mc.unit === 'ratio' ? '' : mc.unit}
                   </span>
                   <span
-                    className={`text-[10px] px-1 rounded ${
+                    className={`text-[11px] px-1.5 py-0.5 rounded font-medium ${
                       mc.delta === 0
                         ? 'text-slate-500'
                         : (mc.better_when === 'lower' && mc.delta < 0) ||
                           (mc.better_when === 'higher' && mc.delta > 0)
-                        ? 'bg-emerald-950 text-emerald-300'
-                        : 'bg-amber-950 text-amber-300'
+                        ? 'bg-emerald-500/15 text-emerald-300'
+                        : 'bg-amber-500/15 text-amber-300'
                     }`}
                   >
                     {mc.delta > 0 ? `+${mc.delta}` : mc.delta}

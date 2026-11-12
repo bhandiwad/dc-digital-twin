@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle2, Send, Terminal } from 'lucide-react';
+import { CheckCircle2, Send, Settings, Terminal } from 'lucide-react';
 import { AgentToolCallTrace } from '../../types';
 
 export interface CopilotMessageItem {
@@ -48,64 +48,57 @@ export const AgentCopilotPanel: React.FC<AgentCopilotPanelProps> = ({
   onSendQuery,
 }) => {
   return (
-    <div className="flex flex-col h-full min-h-[500px] justify-between space-y-3">
-      {/* Live OpenRouter / LLM API Key & Model Configurator */}
-      <div className="bg-slate-900/95 border border-slate-800 rounded-xl p-3 space-y-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+    <div className="flex flex-col h-full min-h-[520px] justify-between space-y-3">
+      {/* Compact Header Bar with Optional Model Settings Popover */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between px-0.5">
+          <div className="flex items-center gap-2 text-xs">
             <span
-              className={`text-[10px] font-mono uppercase px-2 py-0.5 rounded font-bold border ${
-                llmKeyConfigured
-                  ? 'bg-emerald-950/90 text-emerald-300 border-emerald-500/60'
-                  : 'bg-amber-950/90 text-amber-300 border-amber-500/60'
+              className={`w-2 h-2 rounded-full ${
+                llmKeyConfigured ? 'bg-emerald-400' : 'bg-sky-400'
               }`}
-            >
-              {llmKeyConfigured
-                ? `LIVE LLM: ${llmModel.split('/').pop()}`
-                : 'OPENROUTER KEY READY TO CONNECT'}
+            />
+            <span className="font-medium text-slate-200">
+              {llmKeyConfigured ? llmModel.split('/').pop() : 'Built-in Physics Assistant'}
             </span>
           </div>
           <button
             onClick={onToggleLlmSettings}
-            className="text-[11px] font-mono text-cyan-400 hover:underline"
+            className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 px-2 py-1 rounded-md hover:bg-slate-900"
           >
-            {showLlmSettings ? 'Hide LLM Key ▲' : 'Configure OpenRouter / Model ▼'}
+            <Settings className="w-3.5 h-3.5" />
+            <span>{showLlmSettings ? 'Close' : 'LLM Key'}</span>
           </button>
         </div>
 
         {showLlmSettings && (
-          <div className="space-y-2 pt-1 border-t border-slate-800 text-xs">
+          <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3 space-y-2.5 text-xs">
             <div className="grid grid-cols-3 gap-2">
               <div>
-                <label className="text-[10px] font-mono uppercase text-slate-400">Provider</label>
+                <label className="text-[11px] text-slate-400">Provider</label>
                 <select
                   value={llmProvider}
                   onChange={(e) => onChangeProvider(e.target.value)}
-                  className="w-full mt-0.5 bg-slate-950 border border-slate-700 rounded px-2 py-1 font-mono text-[11px] text-white"
+                  className="w-full mt-1 bg-slate-950 border border-slate-700/80 rounded-lg px-2 py-1.5 text-xs text-white"
                 >
                   <option value="openrouter">OpenRouter</option>
-                  <option value="openai">OpenAI Direct</option>
+                  <option value="openai">OpenAI</option>
                 </select>
               </div>
               <div className="col-span-2">
-                <label className="text-[10px] font-mono uppercase text-slate-400">
-                  OpenRouter Model ID (Tool-Calling)
-                </label>
+                <label className="text-[11px] text-slate-400">Model</label>
                 <input
                   type="text"
                   list="openrouter-models"
                   value={llmModel}
                   onChange={(e) => onChangeModel(e.target.value)}
-                  className="w-full mt-0.5 bg-slate-950 border border-slate-700 rounded px-2 py-1 font-mono text-[11px] text-white"
+                  className="w-full mt-1 bg-slate-950 border border-slate-700/80 rounded-lg px-2.5 py-1.5 text-xs text-white"
                 />
                 <datalist id="openrouter-models">
                   <option value="anthropic/claude-3.7-sonnet" />
                   <option value="google/gemini-2.5-pro-preview" />
                   <option value="google/gemini-2.5-flash" />
                   <option value="openai/gpt-4o" />
-                  <option value="openai/gpt-4o-mini" />
-                  <option value="deepseek/deepseek-chat-v3-0324" />
-                  <option value="meta-llama/llama-3.3-70b-instruct" />
                 </datalist>
               </div>
             </div>
@@ -115,70 +108,65 @@ export const AgentCopilotPanel: React.FC<AgentCopilotPanelProps> = ({
                 type="password"
                 value={openRouterKey}
                 onChange={(e) => onChangeApiKey(e.target.value)}
-                placeholder="Paste OpenRouter API Key (sk-or-v1-...)"
-                className="flex-1 bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 font-mono text-[11px] text-white focus:outline-none focus:border-cyan-400"
+                placeholder="Paste API key (optional)..."
+                className="flex-1 bg-slate-950 border border-slate-700/80 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-sky-500"
               />
               <button
                 type="button"
                 onClick={onSaveLlmConfig}
-                className="px-3 py-1.5 rounded bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs shrink-0"
+                className="px-3 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 font-semibold text-xs shrink-0"
               >
-                Save Key
+                Save
               </button>
             </div>
           </div>
         )}
       </div>
 
+      {/* Chat Stream */}
       <div className="flex-1 overflow-y-auto space-y-3 pr-1">
         {messages.map((m, idx) => (
           <div key={idx} className="space-y-2">
             {m.toolCalls && m.toolCalls.length > 0 && (
-              <div className="bg-slate-950/90 border border-indigo-500/40 rounded-xl p-2.5 space-y-1.5">
-                <div className="flex items-center justify-between text-[10px] font-mono uppercase text-indigo-300 font-semibold">
-                  <span className="flex items-center gap-1.5">
-                    <Terminal className="w-3 h-3 text-indigo-400" />
-                    Agent Tool Trace ({m.toolCalls.length} tools)
-                  </span>
-                  {m.modelUsed && <span className="text-cyan-300">{m.modelUsed}</span>}
+              <details className="bg-slate-900/50 border border-slate-800 rounded-xl px-3 py-2 text-xs">
+                <summary className="cursor-pointer text-[11px] font-medium text-sky-400 flex items-center gap-1.5">
+                  <Terminal className="w-3.5 h-3.5" />
+                  <span>Ran {m.toolCalls.length} facility inspection tools</span>
+                </summary>
+                <div className="space-y-1.5 mt-2 pt-2 border-t border-slate-800/80">
+                  {m.toolCalls.map((tc) => (
+                    <div key={tc.step} className="text-[11px] space-y-0.5">
+                      <div className="flex justify-between text-slate-300 font-medium">
+                        <span>{tc.tool_name}</span>
+                        <span className="text-slate-500 tabular-nums">{tc.duration_ms}ms</span>
+                      </div>
+                      <div className="text-emerald-400 flex items-start gap-1">
+                        <CheckCircle2 className="w-3 h-3 shrink-0 mt-0.5" />
+                        <span>{tc.result_summary}</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                {m.toolCalls.map((tc) => (
-                  <div
-                    key={tc.step}
-                    className="bg-slate-900/90 border border-slate-800 rounded-lg p-2 text-[10px] font-mono space-y-0.5"
-                  >
-                    <div className="flex items-center justify-between text-cyan-300">
-                      <span className="font-bold">
-                        #{tc.step} {tc.tool_name}({JSON.stringify(tc.arguments)})
-                      </span>
-                      <span className="text-slate-500">{tc.duration_ms}ms</span>
-                    </div>
-                    <div className="text-emerald-300 flex items-start gap-1">
-                      <CheckCircle2 className="w-3 h-3 shrink-0 mt-0.5 text-emerald-400" />
-                      <span>{tc.result_summary}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              </details>
             )}
 
             <div
-              className={`p-3 rounded-xl text-xs leading-relaxed whitespace-pre-line ${
+              className={`p-3.5 rounded-xl text-xs leading-relaxed whitespace-pre-line ${
                 m.role === 'user'
-                  ? 'bg-cyan-500/20 border border-cyan-500/40 text-cyan-100 ml-6'
-                  : 'bg-slate-900/95 border border-slate-800 text-slate-200'
+                  ? 'bg-sky-500/15 border border-sky-500/30 text-sky-100 ml-8'
+                  : 'bg-slate-900/60 border border-slate-800 text-slate-200'
               }`}
             >
               {m.text}
             </div>
 
             {m.suggestions && m.suggestions.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 pt-1">
+              <div className="flex flex-wrap gap-1.5 pt-0.5">
                 {m.suggestions.map((sug, sIdx) => (
                   <button
                     key={sIdx}
                     onClick={() => onSendQuery(sug)}
-                    className="text-left text-[10px] px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-cyan-300 transition-all"
+                    className="text-left text-[11px] px-2.5 py-1.5 rounded-lg bg-slate-900/80 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white transition-colors"
                   >
                     {sug}
                   </button>
@@ -187,31 +175,33 @@ export const AgentCopilotPanel: React.FC<AgentCopilotPanelProps> = ({
             )}
           </div>
         ))}
+
         {copilotLoading && (
-          <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 text-xs font-mono text-cyan-300 animate-pulse">
-            Executing agent tool calls against live Digital Twin & DuckDB...
+          <div className="p-3 rounded-xl bg-slate-900/40 border border-slate-800 text-xs text-slate-400 animate-pulse">
+            Checking facility telemetry...
           </div>
         )}
       </div>
 
+      {/* Input Bar */}
       <form
         onSubmit={(e) => {
           e.preventDefault();
           onSendQuery();
         }}
-        className="flex items-center gap-2 pt-2 border-t border-slate-800"
+        className="flex items-center gap-2 pt-2 border-t border-slate-800/80"
       >
         <input
           type="text"
           value={copilotInput}
           onChange={(e) => onChangeInput(e.target.value)}
-          placeholder="Ask Agent to inspect cooling loops, query DuckDB, or execute BACnet setpoints..."
-          className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400"
+          placeholder="Ask about hot spots, savings, or maintenance..."
+          className="flex-1 bg-slate-900/80 border border-slate-700/80 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-sky-500"
         />
         <button
           type="submit"
           disabled={copilotLoading}
-          className="p-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold"
+          className="p-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-semibold transition-colors"
         >
           <Send className="w-4 h-4" />
         </button>

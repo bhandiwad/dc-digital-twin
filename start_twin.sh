@@ -18,8 +18,8 @@ if [ ! -d "$ROOT_DIR/.venv" ]; then
   "$ROOT_DIR/.venv/bin/pip" install -r "$ROOT_DIR/backend/requirements.txt"
 fi
 
-# 2. Ensure Frontend production bundle is built
-if [ ! -d "$ROOT_DIR/frontend/dist" ]; then
+# 2. Ensure Frontend production bundle is up to date
+if [ ! -d "$ROOT_DIR/frontend/dist" ] || [ -n "$(find "$ROOT_DIR/frontend/src" -newer "$ROOT_DIR/frontend/dist/index.html" 2>/dev/null)" ]; then
   echo "[2/3] Building React + Three.js 3D Frontend..."
   (cd "$ROOT_DIR/frontend" && npm install && npm run build)
 fi

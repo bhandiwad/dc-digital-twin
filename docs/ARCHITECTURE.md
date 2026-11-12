@@ -53,5 +53,5 @@ Stateless, deterministic, unit-explicit functions with 100% `pytest` invariant c
 ### F. Modular React + Three.js Frontend (`frontend/src/`)
 - [api/client.ts](file:///Users/pb/dctwin/frontend/src/api/client.ts): Typed REST client functions.
 - [App.tsx](file:///Users/pb/dctwin/frontend/src/App.tsx): Clean top-level layout shell, WebSocket lifecycle, 3D viewport wrapper, and tab switcher.
-- `components/workbench/`: Focused right-drawer panels (`ControlsInspectorPanel.tsx`, `AIAnalyticsPanel.tsx`, `WhatIfPanel.tsx`, `AgentCopilotPanel.tsx`).
+- `components/workbench/`: Clean, plain-English right-drawer panels (`OverviewOptimizePanel.tsx`, `ControlsInspectorPanel.tsx`, `PlanSandboxPanel.tsx`, `SystemHealthPanel.tsx`, `WhatIfPanel.tsx`, `AgentCopilotPanel.tsx`).
 - [featureTabs.ts](file:///Users/pb/dctwin/frontend/src/components/workbench/featureTabs.ts) & `components/workbench/features/`: **Zero-Merge-Conflict UI Extension Point**. Any `.tsx` file placed in `components/workbench/features/` exporting `export const plugin: FeatureWorkbenchPlugin` automatically appears as a new Workbench tab in the UI!
