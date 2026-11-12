@@ -1,100 +1,115 @@
-# Pandita's Aether-DCTWIN — Demo Storylines & Walkthrough Playbook
+# Pandita's Aether-DCTWIN — Master Demo Storyline & Complete Showcase Guide
 
 **Live Local URL:** `http://127.0.0.1:8000`
 
 ---
 
-## 1. The 30-Second Opening Hook
+## Presenter Narrative Arc (15–20 Minute Full Showcase)
 
-> *"Modern data halls run legacy air-cooled racks right alongside high-density liquid-cooled AI racks. Today, facility teams over-cool the room just to stay safe, wait days to answer simple capacity questions, and react to pump or fan issues after alarms fire—all while strictly prohibited from installing agents on customer servers.*
+Instead of clicking random tabs, tell **one continuous story about a single facility team's day**—starting from calm morning operations, capturing immediate energy savings, surviving a sudden afternoon equipment failure, sizing a massive new 10,000-GPU customer request, planning safe preventive maintenance, and wrapping up shift handover:
+
+1. **Act 1: The Floor (`2–3m`)** — 3D Hybrid Air + Liquid Hall & Zero-Agent Demarcation Rule
+2. **Act 2: Save Money Today (`3–4m`)** — Closed-Loop Auto-Pilot, Peak Utility Shaving & Inline ROI
+3. **Act 3: Survive a Crisis (`4m`)** — 5 Live Fault Events, 42U Rack Drill-Down & Cooling Sliders
+4. **Act 4: Plan Growth (`4m`)** — 10,000-GPU Mega-Cluster Scale-Out & Phase-1 Row Retrofit
+5. **Act 5: Prevent Downtime (`2–3m`)** — Strainer Fouling Calibration, Safety Guardrails & MOP Checklists
+6. **Act 6: Prove & Hand Over (`2–3m`)** — 24h DuckDB DVR Replay, BYOD CSV Onboarding & Copilot
+
+---
+
+## Act 1: Orienting the Room — The Hybrid Hall & Demarcation Rule (`2–3 mins`)
+
+### What to Say
+> *"Walk into almost any modern data center today and you'll see two worlds sharing one room: legacy 15–20 kW air-cooled racks right next to 45–125 kW liquid-cooled AI racks. Legacy BMS screens give you thousands of flat sensor tags, and facility teams aren't allowed to install agents on customer servers.*
 >
-> *Pandita's Aether-DCTWIN connects only to facility equipment—PDUs, liquid CDUs, perimeter CRACs, and UPS meters—giving operators one calm 3D view of the hall, 1-click cooling & utility peak savings, offline capacity what-if planning, and automated maintenance checklists."*
+> *What you're looking at is Pandita's Aether-DCTWIN—built strictly on facility-side meters: row PDUs, liquid CDUs, perimeter CRACs, and UPS systems. Zero software on tenant servers."*
+
+### What to Click & Showcase
+1. **Top KPI Strip:** Point out the single-glance vitals: **`Power`** (`~1,338 kW` facility / `1,010 kW` IT), **`PUE`** (`1.32 → 1.26`), **`Peak Cold Inlet`** (`~20.7°C`), and **`Alerts: Healthy`**.
+2. **Orbit & Hover on the 3D Floor:** Drag to rotate/zoom the 32-rack hall. Move your cursor across individual racks, the blue **CRAC** perimeter units, the cyan **CDU** liquid units on the right, and the purple **PDU** row lineups on the left. Labels appear **only on hover, selection, or alert**.
+3. **Top-Left 3D Layer Bar (Show all 5 perspectives + 2 overlays):**
+   - **`Inlet °C`:** Cold-aisle intake health across all 32 racks.
+   - **`Rack kW`:** Power density contrast between legacy Rows A–B and dense AI Rows C–D.
+   - **`Thermal`:** Estimated internal thermal load proxy derived from power and cooling ΔT.
+   - **`Cooling`:** Architectural split—16 slate **Air** racks (Rows A–B) vs. 16 sky-blue **Liquid** racks (Rows C–D).
+   - **`Risk`:** Anomaly confidence map (calm green at baseline).
+   - **`Loops` & `Airflow` Toggles:** Point out the animated overhead cyan liquid manifolds (`Loops`), then toggle **`Airflow`** briefly to show 3D rising hot-aisle exhaust plumes.
+4. **Top-Right Sun / Moon Icon:** Toggle **Light Mode** briefly for bright conference rooms vs. dark NOC walls, then return to Dark Mode and **`Inlet °C`**.
 
 ---
 
-## 2. The 10-Minute "Golden Path" End-to-End Demo
+## Act 2: Day-1 Payback — Smart Cooling, Peak Shaving & Inline ROI (`3–4 mins`)
 
-If you have **10 minutes with mixed leadership + engineering stakeholders**, run these 4 beats in order:
+### What to Say
+> *"Notice our cold aisles are sitting around 18.6°C to 20.7°C—way below the 27°C ASHRAE safe limit—because engineers leave cooling on fixed conservative defaults year-round. Let's turn on Auto-Pilot."*
 
-1. **Calm Baseline & Immediate Savings (2.5m)** → Start on **`Overview`**, show live PUE savings & **`Apply Recommended Setpoints`**, toggle **`Grid & Peak Shaving`**, and open **`ROI Summary`**.
-2. **Live Fault & Fast Triage (2.5m)** → Trigger **`Simulate Event → CRAC Blower Trip`**, watch only the impacted racks light up on the 3D floor, inspect a rack in **`Inspect`**, and **`Reset`**.
-3. **Capacity Expansion Without Guesswork (2.5m)** → Open **`Plan → Capacity What-If`**, test **`+160 kW in ROW-C`** and **`Convert ROW-A to Liquid`**.
-4. **Proactive Maintenance & Shift Handover (2.5m)** → Check **`Health`** for heat-exchanger drift + 30-min safety guardrails, generate a **`Maintenance Checklist`** for `CDU-1`, and run one query in **`Copilot`**.
-
----
-
-## 3. Six Targeted Use-Case Storylines (Click-by-Click)
-
-### Storyline 1: Cutting Cooling Waste & Utility Peak Bills
-- **Best For:** VP of Operations, Sustainability Lead, CFO, Facility Director
-- **Narrative:** Facility teams keep air and liquid setpoints 2°C colder than necessary out of caution, paying steep electric bills and peak demand charges during afternoon utility windows.
-- **Walkthrough (`3 mins`):**
-  1. Point to the clean top strip: **`Power`**, **`PUE`** (`Current → Optimized`), **`Peak Cold Inlet`**, and **`Alerts: Healthy`**.
-  2. On the **`Overview`** tab under **`Cooling Optimization`**, click **`View proposed setpoint adjustments`** to show the exact CRAC/CDU temperature and fan/pump trims—nothing is a black box.
-  3. Click **`Apply Recommended Setpoints`** (or enable **`Auto-Pilot`** in the top bar) and point out the live `PUE` drop.
-  4. Under **`Grid & Peak Shaving`**, check **`Simulate Utility Peak Event`** (`$0.285/kWh`) to show how **UPS Battery Peak Shaving** and **Chilled-Water Pre-Cooling** trim ~200 kW of peak grid draw without touching IT racks.
-  5. Switch to the **`ROI`** tab to show annualized OpEx savings, 5-year NPV, avoided CO₂, and unlocked rack capacity inline alongside the 3D floor.
+### What to Click & Showcase
+1. **`Overview` Tab → `Cooling Optimization` Card:**
+   - Point out **`Manual Mode — cooling units are running fixed default setpoints`** and expand **`View 5 proposed setpoint adjustments`** to show the exact CRAC air temperature, CDU warm-water, and VFD fan/pump speed recommendations.
+2. **Turn Auto-Pilot ON:** Click **`Enable Auto-Pilot & Apply Setpoints`** (or the **`Auto-Pilot`** pill in the top bar).
+   - Top bar **`Power`** drops immediately by **`~65–80 kW`** and **`PUE`** steps down (`1.32 → 1.26`).
+   - 3D racks shift from over-cooled cyan (`18.6°C`) to efficient emerald green (`~21.5–23.0°C`).
+   - Top-right button turns green (**`Auto-Pilot On (-66 kW)`**) and `Overview` shows **`Auto-Pilot Active`**.
+3. **Demonstrate Safe Hardware Fallback:** Click **`Switch to Manual Mode (Fixed Setpoints)`** briefly—`Power` and `PUE` revert cleanly to built-in hardware defaults—then turn **`Auto-Pilot`** back **On**.
+4. **`Overview` Tab → `Grid & Peak Shaving` Card:**
+   - Check **`Simulate Utility Peak Event`** (`$0.285/kWh`).
+   - Show **`UPS Battery Peak Shaving`** + **`Chilled-Water Pre-Cooling`** shaving `>200 kW` off peak grid draw, and expand **`Power breakdown & 24h tariff schedule`**.
+5. **`ROI` Tab (Inline Business Case):**
+   - Walk through **Annual OpEx Savings**, **PUE Reduction**, **Unlocked AI Capacity (`+GPUs` / `+kW`)**, **5-Year NPV**, **Avoided Tier-III CapEx**, lever-by-lever dollar breakdown, and 1-click **`Copy` / `.md`** export.
 
 ---
 
-### Storyline 2: Fast Triage During a Cooling Trip or AI Power Surge
-- **Best For:** NOC Operators, Critical Facilities Engineers, Incident Commanders
-- **Narrative:** When a perimeter CRAC trips—or an AI cluster surges +145 kW—operators normally face dozens of raw BMS threshold alarms without spatial context.
-- **Walkthrough (`4 mins`):**
-  1. Top-right of the 3D viewport: click **`Simulate Event` → `CRAC Blower Trip`** (or **`Liquid Row Surge`**).
-  2. Highlight the calm-by-design alerting:
-     - Only affected racks on the 3D floor illuminate with warning/critical rings and live temperature pills.
-     - Top bar updates **`Alerts`** and surfaces an **`Active: CRAC Blower Trip [Reset]`** pill.
-     - Right panel automatically opens **`Overview`** with plain-English impact and **`Recommended fix`**.
-  3. Toggle **`Airflow`** in the top-left 3D layer bar to visualize hot exhaust plumes rising over the impacted aisle.
-  4. Click any highlighted rack on the 3D floor—the right panel switches to **`Inspect`** (`Rack 42U View`), showing 42U server/manifold telemetry. Switch to **`Cooling Setpoints`** inside **`Inspect`** to adjust adjacent CRAC/CDU sliders live.
-  5. Click **`Live Trends`** on the bottom dock to verify the **`30-Minute Forecast`** stays safely below the `27°C` ASHRAE limit, then click **`Reset`**.
+## Act 3: Surviving an Afternoon Crisis — Fault Simulation, 42U Drill-Down & Live Controls (`4 mins`)
+
+### What to Say
+> *"Saving money on a calm Tuesday is great—but chief engineers judge software on what happens when hardware breaks at 2:00 PM. Let's trip a cooling unit."*
+
+### What to Click & Showcase
+1. **Top-Right `Simulate Event` Menu:**
+   - Trigger **`CRAC Blower Trip`** (also available: **`Liquid Row Surge`**, **`CDU Strainer Fouling`**, **`Hot-Aisle Bypass`**, **`Summer Heatwave`**).
+   - Only impacted racks illuminate on the 3D floor; the top bar surfaces **`Active: CRAC Blower Trip [Reset]`**; **`Overview`** displays root cause and **`Recommended fix`**.
+2. **Drill Into a 42U Rack (`Inspect` Tab → `Rack 42U View`):**
+   - Click any highlighted rack on the floor to inspect its 42U chassis list (switches, 8-GPU nodes, power shelves, liquid manifold supply/return).
+   - Open **`Simulate rack manifold or load fault`** on a liquid rack to test **`Restrict Manifold`** or **`Load Spike`**, then **`Reset`**.
+3. **Manual Override Sliders (`Inspect` Tab → `Cooling Setpoints`):**
+   - Switch to **`Cooling Setpoints`** and adjust live CDU/CRAC supply temperature and pump/fan sliders.
+4. **Verify Thermal Trajectory (`Bottom Dock` → `Live Trends`):**
+   - Open **`Live Trends`** to verify the **`30-Minute Forecast`** stays safely below the `27°C` ASHRAE red line, then collapse **`Live Trends`** and click **`Reset`** in the top-right scenario pill.
 
 ---
 
-### Storyline 3: 10,000-GPU Training Cluster Scale-Out & Row Retrofit Planning
-- **Best For:** Capacity Planners, Colocation Sales Engineers, Data Center Architects
-- **Narrative:** A customer asks two questions: *"What changes if we deploy a 10,000-GPU training cluster?"* and *"How much of a Phase-1 pilot can we fit in our existing hall next month?"*
-- **Walkthrough (`4 mins`):**
-  1. Open the **`Plan`** tab (`AI Cluster` mode, pre-set to **`10k Cluster`** on **`NVIDIA GB200 NVL72`**).
-  2. Walk through **what physically changes** vs. a single 1 MW hall:
-     - **Multi-Hall Footprint & Slab Load:** `139` GPU racks + `18` fabric/storage racks (`157` total racks at `1,630 kg/rack`) requires **5 high-density Data Halls** (`20.4 MW` utility feed) and reinforced slab-on-grade.
-     - **87% Liquid / 13% Residual Air Split:** `15.7 MW` goes into `12× 1.5 MW` modular CDUs (`~21,400 LPM`), while **`2.34 MW` of VRM/optics heat still requires room air cooling** (try switching **Cooling Plant Design** to **Perimeter CRAC Air-Only** to show the physical infeasibility guard above 35 kW/rack).
-     - **Sub-Second `AllReduce` Step-Load Transients:** Synchronous AI training barriers swing **`±10.9 MW` in `<100 ms`**, requiring `11.4 MW` of grid-interactive UPS BESS ramp-rate smoothing so utility relays and diesel gensets don't trip.
-  3. Click **`Test Phase-1 Pilot Retrofit on Current Hall`** at the bottom of the card to switch directly into **`Row What-If`**, demonstrating how retrofitting legacy air-cooled `ROW-A` to direct liquid cooling unlocks immediate Phase-1 AI pilot capacity inside the existing hall.
+## Act 4: Strategic Capacity Planning — From 10,000-GPU Mega-Clusters to Single-Row Retrofits (`4 mins`)
+
+### What to Say
+> *"Next comes the big strategic question: 'Our AI team—or an anchor tenant—wants to deploy a 10,000-GPU training cluster. What actually changes, and what can we fit in our existing building next month?'"*
+
+### What to Click & Showcase
+1. **`Plan` Tab → `AI Cluster` (Multi-MW Scale-Out Planner):**
+   - Show **`10k Cluster`** (`10,000 GPUs`) on **`NVIDIA GB200 NVL72 (72 GPU · 126 kW/rack)`** with **`Warm-Water Liquid (30°C)`**:
+     - Requires **`18.0 MW IT` (`20.4 MW` utility)** across **`157 racks` (`139` GPU + `18` fabric)** = **`5 Data Halls`** (vs. Hall 1's `32 racks / ~1.0 MW`).
+   - Switch **Cooling Plant Design** briefly to **`Perimeter CRAC Air-Only`** to show the physical infeasibility guard (`>35 kW/rack` exceeds air limits), then return to **`Warm-Water Liquid`**.
+   - Walk through the **6 Infrastructure Upgrade Cards** (Slab Load `1,630 kg/rack`, `11× 2.5 MVA` MV Transformers & `415V` Busways, `12× 1.5 MW` CDUs @ `~21,400 LPM`, `2.34 MW` Residual Room Air Cooling, `±10.9 MW` `<100ms` Synchronous Training Step-Load BESS Buffer, and PUE OpEx Savings).
+2. **Bridge Macro Plan → Current Hall Pilot (`Row What-If`):**
+   - Click **`Test Phase-1 Pilot Retrofit on Current Hall →`** to automatically simulate converting legacy air-cooled **`ROW-A`** to direct liquid cooling (`+160 kW`) inside an isolated physics clone.
 
 ---
 
-### Storyline 4: Catching Strainer Fouling Early & Safe Maintenance Checklists
-- **Best For:** Chief Building Engineers, Mechanical/Electrical Technicians, Compliance Leads
-- **Narrative:** CDU strainers and heat exchangers foul slowly over weeks. Waiting for a high-temperature alarm risks thermal throttling, while isolating the wrong valve during maintenance can starve live racks.
-- **Walkthrough (`4 mins`):**
-  1. Click **`Simulate Event` → `CDU Strainer Fouling`**.
-  2. Open the **`Health`** tab:
-     - In **`Zone Calibration & Fouling`**, show how the twin detects efficiency loss (`%`) and flags **`Early Drift` / `Service Needed`** purely by comparing PDU electrical load against cooling loop $\Delta T$.
-     - In **`30-Minute Safety Lookahead`**, compare **`Standard BMS`** (lags behind thermal inertia) against **`Smart Control`** (pre-cools within explicit hardware guardrails).
-  3. Open **`Plan` → `Maintenance Checklist`**:
-     - Select **`CDU-1 · Liquid CDU`** and **`Strainer / Filter Service`**.
-     - Point out the automatic **Affected Scope** (downstream racks & kW), **15-minute pre-cool setpoints**, and step-by-step isolation & rollback triggers.
-     - Click **`Copy`** to show 1-click export into a change ticket.
-  4. Click **`Reset`** in the top-right pill.
+## Act 5: Proactive Maintenance — Catching Strainer Drift & Generating Safe Checklists (`2–3 mins`)
+
+### What to Click & Showcase
+1. Click **`Simulate Event` → `CDU Strainer Fouling`**.
+2. **`Health` Tab:**
+   - **`Zone Calibration & Fouling`:** Shows zone efficiency loss (`%`) and **`Early Drift` / `Service Needed`** learned purely from PDU vs. cooling loop meters.
+   - **`30-Minute Safety Lookahead`:** Contrasts **`Standard BMS`** vs. **`Smart Control`** alongside **`Active Hardware Guardrails`**.
+3. **`Plan` Tab → `MOP Steps`:**
+   - Select **`CDU-1 · Liquid CDU`** and **`Strainer / Filter Service`** to show downstream **Affected Scope**, **15-minute pre-cool setpoints**, numbered isolation steps, and **Stop / Rollback triggers**—ready to **`Copy`**.
+   - Click **`Reset`** in the top-right scenario pill.
 
 ---
 
-### Storyline 5: DVR Time-Travel Replay & Zero-Agent Data Onboarding
-- **Best For:** Customer Solutions Architects, BMS/OT Integrators, Security Reviewers
-- **Narrative:** Prospects always ask two practical questions: *"How do we investigate what happened at 3:00 AM?"* and *"Can this work with our existing BMS/PDU data without touching tenant servers?"*
-- **Walkthrough (`3 mins`):**
-  1. Click **`24h Replay`** on the bottom dock below the 3D floor. Drag the timeline scrubber or press **Play** (`2x` / `4x`) to rewind the entire 3D hall and KPI strip across historical DuckDB snapshots, then click **`Exit Replay`**.
-  2. Click **`Data`** in the top bar to open **Data & Connectors**.
-  3. Point out the strict **Facility-Only Demarcation** (`BACnet/IP`, `Modbus TCP CDU`, `SNMPv3 PDU`, `MQTT Sparkplug B`—zero host/GPU agents) and demonstrate **BYOD CSV/JSON upload** for offline customer dataset evaluation.
+## Act 6: Forensics, Zero-Agent Onboarding & Shift Handover (`2–3 mins`)
 
----
-
-### Storyline 6: Auditable Shift Handover with Facility Copilot
-- **Best For:** Shift Supervisors, Junior Operators, Executive Walkthroughs
-- **Narrative:** Operators want plain-English answers at shift change, backed by real telemetry and physics calculations—never LLM guesswork.
-- **Walkthrough (`2 mins`):**
-  1. Open the **`Copilot`** tab (clean chat view using the built-in physics assistant out of the box, or optional OpenRouter/OpenAI key under **`LLM Key`**).
-  2. Click *"Which racks have the warmest inlet temperatures right now?"* or *"Check CDU heat-exchanger drift and fouling health"*.
-  3. Expand **`Ran X facility inspection tools`** above the response to show the exact deterministic tool calls (`inspect_facility_telemetry`, `query_duckdb_24h_history`, `run_counterfactual_whatif`) and execution times.
+### What to Click & Showcase
+1. **`Bottom Dock` → `24h Replay`:** Scrub or play (`1x` / `2x` / `4x`) across 24 hours of DuckDB history to time-travel the entire 3D floor, then click **`Exit Replay`**.
+2. **`Top Bar` → `Data`:** Show facility-only OT protocols (`BACnet/IP`, `Modbus TCP`, `SNMPv3`, `MQTT Sparkplug B`) and **BYOD CSV/JSON Upload** for instant customer dataset replay.
+3. **`Copilot` Tab:** Run a starter prompt and expand **`Ran X facility inspection tools`** to prove every answer comes from deterministic telemetry, DuckDB SQL, and physics tools.

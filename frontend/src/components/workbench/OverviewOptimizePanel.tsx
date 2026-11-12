@@ -133,12 +133,12 @@ export const OverviewOptimizePanel: React.FC<OverviewOptimizePanelProps> = ({
             />
             <div>
               <h3 className="text-sm font-semibold text-white">
-                {isAutoPilot ? 'Auto-Pilot Active (Closed-Loop)' : 'Cooling Optimization'}
+                {isAutoPilot ? 'Auto-Pilot Active' : 'Cooling Optimization'}
               </h3>
               <p className="text-[11px] text-slate-400 mt-0.5">
                 {isAutoPilot
-                  ? 'BACnet Priority 8 supervisory control is actively trimming fans, pumps & supply temps.'
-                  : 'Manual BMS Mode (Priority 16) — cooling units are running fixed conservative setpoints.'}
+                  ? 'Automatically adjusting fans, pumps, and supply temperatures to match live rack heat.'
+                  : 'Manual Mode — cooling units are running fixed default setpoints.'}
               </p>
             </div>
           </div>
@@ -193,7 +193,7 @@ export const OverviewOptimizePanel: React.FC<OverviewOptimizePanelProps> = ({
             className="w-full py-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 font-medium text-xs flex items-center justify-center gap-1.5 transition-colors"
           >
             <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
-            <span>Pause Auto-Pilot (Revert to Manual BMS)</span>
+            <span>Switch to Manual Mode (Fixed Setpoints)</span>
           </button>
         ) : (
           <button
@@ -212,7 +212,7 @@ export const OverviewOptimizePanel: React.FC<OverviewOptimizePanelProps> = ({
             >
               <span>
                 {isAutoPilot
-                  ? `View ${optimization.actions.length} active BACnet Priority 8 overrides`
+                  ? `View ${optimization.actions.length} active Auto-Pilot adjustments`
                   : `View ${optimization.actions.length} proposed setpoint adjustments`}
               </span>
               {showActionsDetail ? (

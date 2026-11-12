@@ -130,13 +130,13 @@ class OptimizerWhatIfService:
                         actions.append(
                             OptimizationAction(
                                 target_id=c_cfg.crac_id,
-                                parameter="BACnet Priority 8 Active (Air + VFD)",
+                                parameter="Auto-Pilot Active (Air + Fan)",
                                 current_value=c_cfg.supply_air_setpoint_c,
                                 recommended_value=round(crac.supply_air_setpoint_c, 1),
                                 unit="°C",
                                 rationale=(
                                     f"Holding {crac.supply_air_setpoint_c:.1f}°C @ {crac.fan_speed_pct:.0f}% fan "
-                                    f"(vs Manual Priority 16: {c_cfg.supply_air_setpoint_c:.1f}°C @ {c_cfg.initial_fan_speed_pct:.0f}%)."
+                                    f"(vs Manual default: {c_cfg.supply_air_setpoint_c:.1f}°C @ {c_cfg.initial_fan_speed_pct:.0f}%)."
                                 ),
                             )
                         )
@@ -146,13 +146,13 @@ class OptimizerWhatIfService:
                         actions.append(
                             OptimizationAction(
                                 target_id=cdu_cfg.cdu_id,
-                                parameter="BACnet Priority 8 Active (Warm Liquid)",
+                                parameter="Auto-Pilot Active (Warm Liquid)",
                                 current_value=cdu_cfg.supply_temp_setpoint_c,
                                 recommended_value=round(cdu.supply_temp_setpoint_c, 1),
                                 unit="°C",
                                 rationale=(
                                     f"Holding {cdu.supply_temp_setpoint_c:.1f}°C @ {cdu.pump_speed_pct:.0f}% pump "
-                                    f"(vs Manual Priority 16: {cdu_cfg.supply_temp_setpoint_c:.1f}°C @ {cdu_cfg.initial_pump_speed_pct:.0f}%)."
+                                    f"(vs Manual default: {cdu_cfg.supply_temp_setpoint_c:.1f}°C @ {cdu_cfg.initial_pump_speed_pct:.0f}%)."
                                 ),
                             )
                         )

@@ -76,7 +76,8 @@ cd frontend && npm run dev
 ## Documentation Index
 
 - **[docs/Aether_DCTWIN_Simple_Overview.pdf](file:///Users/pb/dctwin/docs/Aether_DCTWIN_Simple_Overview.pdf)** — Clean 2-page plain-English overview & value proposition.
-- **[docs/DEMO_PLAYBOOK.md](file:///Users/pb/dctwin/docs/DEMO_PLAYBOOK.md)** — Presenter storylines & click-by-click live demo walkthroughs across 6 use cases.
+- **[docs/Aether_DCTWIN_Technology_Stack.pdf](file:///Users/pb/dctwin/docs/Aether_DCTWIN_Technology_Stack.pdf)** — 2-page technology stack & system architecture reference.
+- **[docs/DEMO_PLAYBOOK.md](file:///Users/pb/dctwin/docs/DEMO_PLAYBOOK.md)** — Master 6-Act presenter storyline & complete feature showcase guide.
 - **[docs/DOMAIN_PRIMER_FOR_SWES.md](file:///Users/pb/dctwin/docs/DOMAIN_PRIMER_FOR_SWES.md)** — *"Data Center Critical Facilities for Software Engineers"* (non-domain onboarding Rosetta Stone).
 - **[docs/ARCHITECTURE.md](file:///Users/pb/dctwin/docs/ARCHITECTURE.md)** — Modular backend/frontend architecture, YAML site configs, and zero-conflict plugin loaders.
 - **[CONTRIBUTING.md](file:///Users/pb/dctwin/CONTRIBUTING.md)** — Developer workflow, unit-suffix standards, demarcation guardrails, and PR checklist.

@@ -393,8 +393,8 @@ export const App: React.FC = () => {
             onClick={() => handleUpdateControl({ auto_optimize: !optimization.auto_pilot_active })}
             title={
               optimization.auto_pilot_active
-                ? 'Closed-loop BACnet Priority 8 active — click to relinquish back to Manual BMS (Priority 16)'
-                : 'Manual BMS Mode (Priority 16) — click to enable closed-loop Auto-Pilot optimization'
+                ? 'Auto-Pilot is actively tuning fans, pumps & supply temps — click to switch back to Manual Mode'
+                : 'Manual Mode (fixed setpoints) — click to enable Auto-Pilot smart cooling'
             }
             className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 border transition-colors tabular-nums ${
               optimization.auto_pilot_active
