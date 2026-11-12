@@ -345,13 +345,20 @@ class DuckDBTelemetryStore:
         engine.trigger_scenario("normal")
         engine.outdoor_wetbulb_c = float(row[5])
         engine.outdoor_drybulb_c = float(row[5]) + 7.5
-        engine.row_load_boost_kw["ROW-C"] = float(row[17])
-        engine.cracs["CRAC-2"].enabled = bool(row[18])
-        if not row[18]:
-            engine.cracs["CRAC-2"].fan_speed_pct = 0.0
-        engine.cdu_fouling_factor["CDU-1"] = float(row[19])
-        if float(row[19]) < 0.8:
-            engine.cdus["CDU-1"].pump_speed_pct = 50.0
+        target_row = "ROW-C" if "ROW-C" in engine.row_load_boost_kw else next(iter(engine.row_load_boost_kw.keys()))
+        engine.row_load_boost_kw[target_row] = float(row[17])
+        crac_ids = list(engine.cracs.keys())
+        if crac_ids:
+            target_crac = "CRAC-2" if "CRAC-2" in engine.cracs else crac_ids[min(1, len(crac_ids) - 1)]
+            engine.cracs[target_crac].enabled = bool(row[18])
+            if not row[18]:
+                engine.cracs[target_crac].fan_speed_pct = 0.0
+        cdu_ids = list(engine.cdus.keys())
+        if cdu_ids:
+            target_cdu = "CDU-1" if "CDU-1" in engine.cdus else cdu_ids[0]
+            engine.cdu_fouling_factor[target_cdu] = float(row[19])
+            if float(row[19]) < 0.8:
+                engine.cdus[target_cdu].pump_speed_pct = 50.0
 
         # Scale general IT load to match historical total_it_power_kw
         target_it_kw = float(row[6])

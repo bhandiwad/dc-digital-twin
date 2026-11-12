@@ -140,10 +140,10 @@ export const DataConnectorsModal: React.FC<{
             </div>
             <div>
               <h2 className="text-base font-bold text-white">
-                Enterprise BMS / DCIM / GPU Connectors & "Bring Your Own Data" (BYOD) Hub
+                Enterprise Facility BMS / EPMS / CDU Connectors & "Bring Your Own Data" (BYOD) Hub
               </h2>
               <p className="text-xs text-slate-400">
-                Ingest customer CSV/Parquet historian exports with AI fuzzy column mapping or connect live BACnet/IP, Modbus, Redfish & NVIDIA DCGM streams
+                Ingest customer CSV/Parquet historian exports or connect live BACnet/IP, Modbus TCP, CoolIT CDU, SNMPv3 EPMS & Sparkplug B facility streams (zero IT server agents required)
               </p>
             </div>
           </div>
@@ -168,7 +168,7 @@ export const DataConnectorsModal: React.FC<{
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
-                2. Live Protocol Bridges (BACnet / DCGM / Redfish)
+                2. Live Facility Bridges (BACnet / CDU / EPMS)
               </button>
             </div>
             <button
@@ -209,13 +209,13 @@ export const DataConnectorsModal: React.FC<{
                         sub: 'BMS + Liebert CRAC/CDU',
                       },
                       {
-                        id: 'nvidia_dcgm',
-                        title: 'NVIDIA DCGM Export',
-                        sub: 'Prometheus GPU Telemetry',
+                        id: 'coolit_epms',
+                        title: 'CoolIT CDU + PowerLogic',
+                        sub: 'Liquid CDU + 415V PDU EPMS',
                       },
                       {
                         id: 'sunbird_dcim',
-                        title: 'Sunbird / OSIsoft PI',
+                        title: 'Sunbird / AVEVA PI',
                         sub: 'DCIM Power & ASHRAE',
                       },
                     ].map((preset) => (
@@ -301,7 +301,7 @@ export const DataConnectorsModal: React.FC<{
                       How Operator BYOD Calibration Works:
                     </div>
                     <p className="text-slate-400 leading-relaxed">
-                      1. **Fuzzy Vendor Header Recognition**: Automatically maps Schneider EcoStruxure, Siemens, Vertiv, Sunbird, or NVIDIA DCGM column names (`Schneider_IT_Load_kW`, `dcgm_fi_dev_gpu_temp`, `Ambient_WetBulb_DegC`) to Aether-DCTWIN's canonical physics schema.
+                      1. **Fuzzy Vendor Header Recognition**: Automatically maps Schneider EcoStruxure, Siemens Desigo, Vertiv, CoolIT CDU, PowerLogic EPMS, or AVEVA PI historian column names (`Schneider_IT_Load_kW`, `cdu_return_max_c`, `Ambient_WetBulb_DegC`) to Aether-DCTWIN's canonical physics schema—strictly at the facility demarcation boundary.
                     </p>
                     <p className="text-slate-400 leading-relaxed">
                       2. **Unit Normalization & DuckDB Parquet Storage**: Converts `W → kW`, validates PUE and cooling power balance, and writes a permanent `.parquet` file into the 24-hour Time-Series Scrubber.
@@ -369,7 +369,7 @@ export const DataConnectorsModal: React.FC<{
               </div>
             </div>
           ) : (
-            /* Mode 2: Live Industrial Protocol Connectors (BACnet, Modbus, Redfish, NVIDIA DCGM, MQTT) */
+            /* Mode 2: Live Facility Protocol Connectors (BACnet/IP, Modbus TCP, CoolIT CDU, SNMPv3 EPMS, MQTT Sparkplug B) */
             <div className="grid grid-cols-12 gap-5">
               <div className="col-span-5 space-y-2.5">
                 {connectors.map((c) => {

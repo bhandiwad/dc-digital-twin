@@ -1,0 +1,90 @@
+site_id: "compact-edge-pod-16"
+site_name: "Regional Edge Colocation Pod (16 Racks)"
+ambient_defaults:
+  outdoor_wetbulb_c: 17.5
+  outdoor_drybulb_c: 24.0
+  hall_relative_humidity_pct: 42.0
+
+ashrae_limits:
+  air_inlet_recommend_max_c: 27.0
+  air_inlet_allowable_max_c: 32.0
+  chip_warning_c: 70.0
+  chip_throttle_c: 78.0
+  chip_critical_max_c: 85.0
+  liquid_return_sla_max_c: 40.0
+  dewpoint_safety_margin_c: 2.5
+
+economics:
+  utility_transformer_limit_kw: 900.0
+  blended_electricity_usd_per_kwh: 0.130
+  off_peak_usd_per_kwh: 0.075
+  shoulder_usd_per_kwh: 0.125
+  peak_tou_usd_per_kwh: 0.210
+  critical_dr_usd_per_kwh: 0.310
+  monthly_demand_charge_usd_per_kw: 24.00
+  tier_iii_capex_usd_per_kw: 9000.0
+  legacy_baseline_pue: 1.380
+  wue_evap_factor_l_per_kwh: 1.35
+  grid_carbon_g_per_kwh_default: 290.0
+
+ups_units:
+  - ups_id: "UPS-1"
+    name: "Edge UPS Alpha"
+    rated_capacity_kw: 900.0
+  - ups_id: "UPS-2"
+    name: "Edge UPS Beta"
+    rated_capacity_kw: 900.0
+
+crac_units:
+  - crac_id: "CRAC-N1"
+    name: "Perimeter Air Handler West"
+    served_rows: ["ROW-1", "ROW-2"]
+    position: { x: -5.0, y: 1.2, z: -8.0 }
+    supply_air_setpoint_c: 18.0
+    initial_fan_speed_pct: 70.0
+    cooling_capacity_kw: 260.0
+    max_airflow_cfm: 32000.0
+  - crac_id: "CRAC-N2"
+    name: "Perimeter Air Handler East"
+    served_rows: ["ROW-1", "ROW-2"]
+    position: { x: 5.0, y: 1.2, z: -8.0 }
+    supply_air_setpoint_c: 18.0
+    initial_fan_speed_pct: 70.0
+    cooling_capacity_kw: 260.0
+    max_airflow_cfm: 32000.0
+
+cdu_units:
+  - cdu_id: "CDU-EDGE-1"
+    name: "Liquid CDU Pod-1"
+    served_rows: ["ROW-2"]
+    position: { x: 10.0, y: 1.1, z: 3.0 }
+    supply_temp_setpoint_c: 24.0
+    initial_pump_speed_pct: 78.0
+    cooling_capacity_kw: 650.0
+    max_flow_lpm: 480.0
+
+rows:
+  - row_id: "ROW-1"
+    pdu_id: "PDU-1"
+    ups_id: "UPS-1"
+    pdu_rated_kw: 220.0
+    z_pos: -3.0
+    rack_count: 8
+    cooling_type: "air"
+    workload_class: "general_compute"
+    rack_max_kw: 20.0
+    gpus_per_rack: 2
+    nominal_r_th_c_per_kw: 0.080
+    nominal_c_th_kj_per_c: 420.0
+  - row_id: "ROW-2"
+    pdu_id: "PDU-2"
+    ups_id: "UPS-2"
+    pdu_rated_kw: 700.0
+    z_pos: 3.0
+    rack_count: 8
+    cooling_type: "hybrid_liquid"
+    workload_class: "ai_inference"
+    rack_max_kw: 70.0
+    gpus_per_rack: 24
+    nominal_r_th_c_per_kw: 0.023
+    nominal_c_th_kj_per_c: 880.0

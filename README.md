@@ -5,9 +5,19 @@
 
 ## Overview
 
-**Pandita's Aether-DCTWIN** is a full-stack **Data Center Digital Twin** engineered for modern hybrid-cooled data halls that combine traditional perimeter air cooling (`CRAC`) with **direct-to-chip liquid cooling (`CDU`)** for high-density AI GPU clusters (`65–85 kW/rack`).
+**Pandita's Aether-DCTWIN** is a production-structured, config-driven **Data Center Critical Facilities Digital Twin** engineered for modern hybrid-cooled data halls that combine perimeter air cooling (`CRAC`) with **direct-to-chip liquid cooling (`CDU`)** for high-density AI clusters (`65–85 kW/rack`).
 
-Designed around the real-world **Facility vs. IT organizational boundary**, Aether-DCTWIN delivers predictive thermal intelligence, online self-calibrating physics, constrained Model Predictive Control (`MPC`), automated Method of Procedure (`MOP`) generation, and counterfactual *"What-If"* capacity simulation **without ever requiring agents or access inside tenant servers**.
+Designed strictly around the real-world **Critical Facilities vs. Tenant IT demarcation boundary**, Aether-DCTWIN delivers self-calibrating electro-thermal physics, constrained Model Predictive Control (`SLSQP MPC`), BACnet Priority Array supervisory control, automated Method of Procedure (`MOP`) generation, and counterfactual *"What-If"* capacity simulation **without ever requiring agents, exporters, or access inside tenant IT servers**.
+
+---
+
+## New Team Members: Start Here!
+
+Assigning or picking up one of the Feature Specification PRs (`PRD-01` through `PRD-10`)? Read these three guides first (no prior HVAC or electrical background required):
+
+1. **[Data Center Critical Facilities for Software Engineers (`docs/DOMAIN_PRIMER_FOR_SWES.md`)](file:///Users/pb/dctwin/docs/DOMAIN_PRIMER_FOR_SWES.md)** — Translates PUE, CRACs, CDUs, Wet-Bulb, Dew Point, 3-Phase PDUs, and BACnet Priority Arrays into distributed systems mental models.
+2. **[Modular Architecture Guide (`docs/ARCHITECTURE.md`)](file:///Users/pb/dctwin/docs/ARCHITECTURE.md)** — Complete map of declarative YAML blueprints (`configs/sites/`), the pure Physics SDK (`backend/domain/`), BACnet adapters (`backend/adapters/`), numerical solvers (`backend/services/`), and zero-conflict plugin loaders.
+3. **[Developer Contributing Guide (`CONTRIBUTING.md`)](file:///Users/pb/dctwin/CONTRIBUTING.md)** — Local setup, `pytest` invariant suite, multi-topology verification, and how to ship a feature PR in 4 conflict-free steps.
 
 ---
 
@@ -15,60 +25,14 @@ Designed around the real-world **Facility vs. IT organizational boundary**, Aeth
 
 | Capability Pillar | What It Does | Key Modules |
 | :--- | :--- | :--- |
-| **1. 3D Spatial Digital Twin & 42U Elevation Inspector** | Interactive 3D WebGL data hall (`32 Racks`, `4 CRACs`, `2 Liquid CDUs`, `4 PDUs`, `2 UPS`) with 5 real-time heatmap layers, animated CFD exhaust plumes, liquid coolant flow pulses, **Light/Dark Mode**, and clickable **42U server blade drill-down**. | `frontend/src/components/DataHall3D.tsx`, `RackElevation42U.tsx` |
-| **2. PUE Decomposition, TOU Grid Tariff & UPS BESS Peak-Shaving** | Real-time 5-way facility power & PUE decomposition, 24-hour Utility Time-of-Use (`TOU`) tariff arbitrage, **UPS-A/B Li-Ion BESS peak-demand shaving (`115–165 kW`)**, chilled-water thermal storage pre-cooling/coasting, and utility Demand Response (`DR`) simulation. | `backend/ai_engine.py`, `FacilityMLSuitePanel.tsx` |
-| **3. OpenDT Online Self-Calibration (RLS + Kalman Filter)** | Continuously learns each cooling zone's **Thermal Resistance ($R_{\text{th}}$)** and **Thermal Capacitance ($C_{\text{th}}$)** from facility PDU & CDU/CRAC sensors—cutting temperature RMSE from `±3.00°C` to `±0.34°C` and detecting heat-exchanger `UA` fouling drift weeks before alarms fire. | `backend/ai_engine.py`, `FacilityMLSuitePanel.tsx` |
-| **4. Constrained MPC / Safe-RL Cooling Controller** | Solves a 30-minute lookahead trajectory (`+0m` to `+30m`) with hard **Control Barrier Functions (CBF)** (`Cold-Aisle ≤ 27.0°C`, `CDU Return ≤ 40.0°C`, `Max VFD Slew ≤ 4%/min`), pre-cooling ahead of AI load surges and eliminating CRAC fan hunting. | `backend/ai_engine.py`, `FacilityMLSuitePanel.tsx` |
-| **5. GraphRAG Blast-Radius & Automated MOP Generator** | Traverses the `NetworkX` facility topology graph from any asset (`CDU-1`, `CRAC-2`, `PDU-C`) to identify downstream racks and generates an ASHRAE TC 9.9 / vendor-compliant **Method of Procedure (MOP)** with `T-15m` pre-cooling setpoints and LOTO steps. | `backend/ai_engine.py`, `FacilityMLSuitePanel.tsx` |
-| **6. Real OpenRouter LLM Tool-Calling Agent** | Live function-calling LLM loop (`OpenRouter` / `OpenAI` compatible) that autonomously chains 7 simulator, calibration, MPC, GraphRAG, and DuckDB SQL tools and displays full execution traces. | `backend/llm_agent.py`, `App.tsx` |
-| **7. 24-Hour DuckDB + Parquet Replay & BYOD Connector Hub** | Embedded **DuckDB + Parquet** historian with 24-hour public benchmark traces (*Kaggle Green AI*, *ORNL Frontier CDU*, *IEEE DataPort HVAC*), drag-and-drop **BYOD CSV auto-mapper**, and live **BACnet/IP, Modbus, Redfish, NVIDIA DCGM, and MQTT** protocol bridges. | `backend/telemetry_store.py`, `backend/connectors.py`, `DataConnectorsModal.tsx` |
-| **8. Executive ROI & Sustainability Report Generator** | One-click financial business case quantifying PUE reduction, annual `\$` and `MWh` savings, `tCO₂` and evaporative water avoided, and **unlocked AI GPU capacity (`+GPUs` & avoided Tier-III CapEx)** with Markdown export. | `ExecutiveROIModal.tsx`, `backend/ai_engine.py` |
-
----
-
-## System Architecture
-
-```mermaid
-flowchart TB
-    subgraph External["Operator Telemetry & Public Benchmarks"]
-        CSV["BYOD Operator CSV / Parquet\n(Schneider, Sunbird, DCGM)"]
-        PROTO["Industrial Protocol Bridges\n(BACnet/IP, Modbus, Redfish, DCGM, MQTT)"]
-        BENCH["24h Public Benchmark Traces\n(Kaggle Green AI, ORNL Frontier, IEEE HVAC)"]
-    end
-
-    subgraph Storage["Time-Series & Topology Layer (Python)"]
-        DUCK[("DuckDB + Apache Parquet\n24h Historian (288 x 5m steps)")]
-        NX["NetworkX Multi-Layer Graph\n(Power + Air Cooling + Liquid Cooling)"]
-    end
-
-    subgraph Core["Coupled Electro-Thermal Digital Twin Core"]
-        SIM["DataHallTwinEngine\n32 Racks (42U) • 4 CRACs • 2 CDUs • 4 PDUs • 2 UPS"]
-        SANDBOX["Counterfactual What-If Cloner\n(Non-destructive deep-copy sandbox)"]
-    end
-
-    subgraph AILayer["Facility-First AI, ML & Agentic Layer"]
-        RLS["OpenDT RLS + Kalman Calibrator\n(Online R_th, C_th & UA Fouling Drift)"]
-        PINN["State-Space Thermal Forecaster\n(+1m to +30m Horizon + IsolationForest)"]
-        MPC["Constrained MPC / Safe-RL Solver\n(30m Lookahead + CBF Safety Barriers)"]
-        GRAPHRAG["GraphRAG SOP / MOP Synthesizer\n(ASHRAE TC 9.9 + Blast Radius)"]
-        LLM["OpenRouter Tool-Calling Agent\n(7 Real Python Tools + Execution Trace)"]
-    end
-
-    subgraph Frontend["Interactive 3D WebGL Workbench (React + Three.js)"]
-        VIEW3D["3D Data Hall + CFD Plumes\n(Dark & Light Mode UI)"]
-        RACK42U["42U Blade Elevation Inspector"]
-        SCRUB["24h Timeline Scrubber (1x/4x/8x)"]
-        ROIMOD["Executive ROI & BYOD Modals"]
-    end
-
-    CSV & PROTO & BENCH --> DUCK
-    DUCK <--> SIM
-    NX <--> SIM
-    SIM <--> SANDBOX
-    SIM --> RLS & PINN & MPC & GRAPHRAG
-    RLS & PINN & MPC & GRAPHRAG <--> LLM
-    SIM & AILayer <-->|"FastAPI REST + 1.5s WebSocket"| VIEW3D & RACK42U & SCRUB & ROIMOD
-```
+| **1. Declarative Multi-Site 3D Digital Twin & 42U Inspector** | Config-driven 3D WebGL data hall (`configs/sites/*.yaml`, e.g., 32-rack Hybrid AI Hall or 16-rack Edge Hall) with 5 heatmap layers, CFD exhaust plumes, liquid coolant flow pulses, **Light/Dark Mode**, and clickable **42U rack elevation drill-down**. | `configs/sites/`, `frontend/src/components/DataHall3D.tsx`, `RackElevation42U.tsx` |
+| **2. Validated Critical Facilities Physics SDK** | Pure, unit-tested thermodynamic & electrical functions: Magnus-Tetens dew point, chiller `COP` & waterside economizer share, VFD cubic affinity laws, sensible $\Delta T$, thermal ride-through runway, and `120°` 3-phase phasor neutral current. | `backend/domain/` |
+| **3. Stateful OpenDT Self-Calibration (`NumPy` RLS)** | Online `2×2` Recursive Least Squares covariance filter learning zone **Thermal Resistance ($R_{\text{th}}$)** and **Thermal Capacitance ($C_{\text{th}}$)** from PDU & CDU/CRAC demarcation meters—detecting heat-exchanger `UA` fouling drift automatically. | `backend/services/calibration_rls.py`, `FacilityMLSuitePanel.tsx` |
+| **4. Constrained `SciPy SLSQP` MPC Controller** | Solves a receding-horizon 30-minute trajectory using `scipy.optimize.minimize(..., method="SLSQP")` with hard **Control Barrier Functions (CBF)** (`Cold-Aisle ≤ 27.0°C`, `CDU Return ≤ 40.0°C`, `Max VFD Slew ≤ 4%/min`). | `backend/services/mpc_solver.py`, `FacilityMLSuitePanel.tsx` |
+| **5. BACnet Priority 8/16 Adapter & Facility Connectors** | Hardware abstraction supporting ASHRAE 135 **BACnet Priority 8** supervisory setpoint writes with atomic `NULL` relinquishment to **Priority 16** local PID, plus **Modbus TCP CDU, SNMPv3 EPMS, Sparkplug B, and BYOD CSV** ingestion. | `backend/adapters/`, `backend/connectors.py`, `DataConnectorsModal.tsx` |
+| **6. PUE, Utility TOU Grid Tariff & UPS BESS Peak-Shaving** | Real-time 5-way facility power & PUE decomposition, config-driven Utility Time-of-Use (`TOU`) tariff arbitrage, **UPS Li-Ion BESS peak-demand shaving**, and chilled-water thermal storage pre-cooling. | `backend/services/energy_roi.py`, `FacilityMLSuitePanel.tsx` |
+| **7. GraphRAG Blast-Radius & Automated MOP Generator** | Traverses the `NetworkX` facility dependency graph from any asset (`CDU`, `CRAC`, `PDU`) to identify downstream blast radius and generates an ASHRAE TC 9.9 **Method of Procedure (MOP)** with `T-15m` pre-cooling setpoints and LOTO steps. | `backend/services/mop_graphrag.py`, `FacilityMLSuitePanel.tsx` |
+| **8. OpenRouter LLM Tool-Calling Agent & Executive ROI** | Live function-calling LLM loop (`OpenRouter` / `OpenAI` compatible) chaining 7 simulator, RLS, MPC, GraphRAG, and DuckDB SQL tools, paired with a 1-click **Executive ROI & Unlocked Capacity** report generator. | `backend/llm_agent.py`, `AgentCopilotPanel.tsx`, `ExecutiveROIModal.tsx` |
 
 ---
 
@@ -81,18 +45,24 @@ chmod +x start_twin.sh
 ```
 Open **http://127.0.0.1:8000** in your browser.
 
-*(Optional)* To pre-configure your OpenRouter API key via environment variable (or you can paste it directly into the **Agent** tab in the UI):
+*(Optional)* Switch to an alternate customer site blueprint or configure an OpenRouter API key:
 ```bash
+export DCTWIN_SITE_CONFIG="configs/sites/compact_edge_16rack.yaml"
 export OPENROUTER_API_KEY="sk-or-v1-..."
 ./start_twin.sh
 ```
 
-### 2. Docker Compose Launch
+### 2. Run Automated Guardrail & Physics Tests
+```bash
+PYTHONPATH=backend .venv/bin/pytest tests -v
+```
+
+### 3. Docker Compose Launch
 ```bash
 docker compose up --build
 ```
 
-### 3. Hot-Reload Development Mode
+### 4. Hot-Reload Team Development Mode
 ```bash
 # Terminal 1: FastAPI Backend
 PYTHONPATH=backend .venv/bin/uvicorn main:app --reload --port 8000
@@ -105,51 +75,46 @@ cd frontend && npm run dev
 
 ## Documentation Index
 
-- **[README.md](file:///Users/pb/dctwin/README.md)** — Architecture overview, quick start, and repository map.
-- **[docs/DEPLOYMENT.md](file:///Users/pb/dctwin/docs/DEPLOYMENT.md)** — Complete deployment guide: Local bare-metal, Docker & Docker Compose, Cloud PaaS (Render/Railway/Fly.io), Cloud VM + Systemd & Nginx TLS (`wss://`), On-Premises Kubernetes (`k8s`), and BMS/DCIM firewall rules.
-- **[docs/TECHNICAL_DOCUMENTATION.md](file:///Users/pb/dctwin/docs/TECHNICAL_DOCUMENTATION.md)** — Deep dive into the coupled electro-thermal physics equations, OpenDT RLS/Kalman calibration math, Constrained MPC + Control Barrier Functions, NetworkX GraphRAG, DuckDB schema, OpenRouter tool-calling protocol, and full REST/WebSocket API reference.
-- **[docs/USER_DOCUMENTATION.md](file:///Users/pb/dctwin/docs/USER_DOCUMENTATION.md)** — Complete operator & sales playbook covering the 3D viewport, 42U blade inspector, 24h time-series replay, BYOD customer CSV onboarding, MPC/MOP generation, OpenRouter Agent setup, and Executive ROI report export.
+- **[docs/DOMAIN_PRIMER_FOR_SWES.md](file:///Users/pb/dctwin/docs/DOMAIN_PRIMER_FOR_SWES.md)** — *"Data Center Critical Facilities for Software Engineers"* (non-domain onboarding Rosetta Stone).
+- **[docs/ARCHITECTURE.md](file:///Users/pb/dctwin/docs/ARCHITECTURE.md)** — Modular backend/frontend architecture, YAML site configs, and zero-conflict plugin loaders.
+- **[CONTRIBUTING.md](file:///Users/pb/dctwin/CONTRIBUTING.md)** — Developer workflow, unit-suffix standards, demarcation guardrails, and PR checklist.
+- **[docs/DEPLOYMENT.md](file:///Users/pb/dctwin/docs/DEPLOYMENT.md)** — Bare-metal, Docker Compose, Cloud PaaS, Nginx TLS (`wss://`), Kubernetes (`k8s`), and BMS/EPMS firewall guide.
+- **[docs/TECHNICAL_DOCUMENTATION.md](file:///Users/pb/dctwin/docs/TECHNICAL_DOCUMENTATION.md)** — Electro-thermal equations, RLS & SLSQP MPC formulations, DuckDB historian schema, and REST/WebSocket reference.
+- **[docs/USER_DOCUMENTATION.md](file:///Users/pb/dctwin/docs/USER_DOCUMENTATION.md)** — Operator & customer demo walkthrough.
 
 ---
 
 ## Repository Structure
 
 ```text
-/Users/pb/dctwin/
-├── README.md                          # Project overview & quick start
-├── start_twin.sh                      # One-command launcher script
-├── Dockerfile                         # Multi-stage Node 22 + Python 3.12 container build
-├── docker-compose.yml                 # Docker Compose deployment
-├── data/                              # Persistent DuckDB database & Parquet time-series files
-│   ├── dctwin_telemetry.duckdb
-│   ├── kaggle_green_ai_24h.parquet
-│   ├── ornl_frontier_cdu_24h.parquet
-│   └── ieee_ashrae_fault_24h.parquet
-├── docs/
-│   ├── TECHNICAL_DOCUMENTATION.md     # Physics, ML algorithms, schemas & API reference
-│   └── USER_DOCUMENTATION.md          # Operator guide & customer demo walkthrough
+dctwin/
+├── .github/workflows/ci.yml           # Automated Pytest + TypeScript CI on every Push & PR
+├── CONTRIBUTING.md                    # Team onboarding, unit rules & 4-step feature PR workflow
+├── README.md                          # Overview, quick start & documentation index
+├── configs/sites/                     # Declarative customer facility blueprints (zero hardcoded IDs)
+│   ├── default_hall.yaml              # 32-Rack Hybrid Air + Direct-Liquid AI Hall
+│   └── compact_edge_16rack.yaml       # 16-Rack Edge AI Hall (used in multi-topology CI tests)
 ├── backend/
-│   ├── requirements.txt               # Python dependencies (FastAPI, NumPy, SciPy, scikit-learn, NetworkX, DuckDB)
-│   ├── models.py                      # Pydantic v2 data schemas across all layers
-│   ├── simulator.py                   # Coupled electro-thermal & 42U physics engine + NetworkX topology
-│   ├── ai_engine.py                   # Forecaster, IsolationForest, OpenDT RLS, MPC solver, GraphRAG MOP & ROI engine
-│   ├── llm_agent.py                   # Live OpenRouter / OpenAI function-calling agent loop (7 callable tools)
-│   ├── telemetry_store.py             # DuckDB + Parquet 24-hour historian & SQL analytics
-│   ├── connectors.py                  # Enterprise BACnet/Modbus/Redfish/DCGM bridges & BYOD CSV fuzzy auto-mapper
-│   └── main.py                        # FastAPI server, REST routes, 1.5s WebSocket broadcast & static SPA host
-└── frontend/
-    ├── package.json
-    ├── vite.config.ts
-    └── src/
-        ├── App.tsx                    # Main command center layout, header ribbon, Light/Dark mode & 6-tab workbench
-        ├── types.ts                   # TypeScript interfaces matching backend Pydantic models
-        ├── index.css                  # Tailwind CSS + Dark & Light theme rules
-        └── components/
-            ├── DataHall3D.tsx         # Three.js / React Three Fiber 3D data hall, CFD plumes & liquid pulses
-            ├── FacilityMLSuitePanel.tsx # OpenDT RLS Calibration, Constrained MPC Lookahead & GraphRAG MOP UI
-            ├── RackElevation42U.tsx   # Interactive 42U server blade elevation & QD valve fault injector
-            ├── TimeSeriesReplayBar.tsx # 24h DuckDB timeline scrubber (1x/4x/8x) & incident jump bookmarks
-            ├── TelemetryCharts.tsx    # Live SVG sparklines & 30-min PINN forecast horizon strip
-            ├── DataConnectorsModal.tsx # BYOD CSV drag-and-drop uploader & live protocol handshake tester
-            └── ExecutiveROIModal.tsx  # Financial, PUE, carbon & unlocked GPU capacity business case modal
+│   ├── config_loader.py               # Pydantic-validated YAML site & tariff config loader
+│   ├── domain/                        # Pure Physics SDK (ASHRAE, psychrometrics, hydraulics, 3-phase AC)
+│   ├── adapters/                      # BaseTelemetryAdapter + BACnet Priority 8/16 & NULL relinquish
+│   ├── services/                      # Modular NumPy RLS, SciPy SLSQP MPC, What-If, MOP, TOU & ROI
+│   ├── api/
+│   │   ├── deps.py                    # Shared TwinRuntimeContainer dependency singleton
+│   │   ├── routers/                   # Core domain FastAPI routers
+│   │   ├── plugin_loader.py           # Auto-mounts feature routers in api/features/*.py
+│   │   └── features/                  # Drop-in conflict-free feature routers (PRD-01..PRD-10)
+│   ├── simulator.py                   # Topology-generic coupled electro-thermal engine + NetworkX graph
+│   ├── telemetry_store.py             # DuckDB + Parquet 24-hour historian & SQL engine
+│   ├── connectors.py                  # BACnet/Modbus/CoolIT CDU/SNMP EPMS/Sparkplug bridges & BYOD mapper
+│   ├── llm_agent.py                   # OpenRouter / OpenAI tool-calling agent loop
+│   └── main.py                        # Thin 89-line FastAPI entrypoint
+├── frontend/src/
+│   ├── App.tsx                        # Clean application shell & 3D viewport layout
+│   ├── api/client.ts                  # Typed REST client helpers
+│   └── components/
+│       ├── DataHall3D.tsx             # Three.js / R3F 3D data hall, CFD plumes & liquid loops
+│       ├── FacilityMLSuitePanel.tsx   # RLS Calibration, SLSQP MPC, TOU Energy & GraphRAG MOP UI
+│       └── workbench/                 # Modular right-drawer panels + auto-discovered features/*.tsx
+└── tests/                             # Pytest Physics SDK, Multi-Topology, Demarcation & API suite
 ```

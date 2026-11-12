@@ -1,0 +1,138 @@
+site_id: "hall-01-ai-factory"
+site_name: "Hall-01 High-Density AI Factory (32 Racks)"
+ambient_defaults:
+  outdoor_wetbulb_c: 19.5
+  outdoor_drybulb_c: 26.8
+  hall_relative_humidity_pct: 45.0
+
+ashrae_limits:
+  air_inlet_recommend_max_c: 27.0
+  air_inlet_allowable_max_c: 32.0
+  chip_warning_c: 70.0
+  chip_throttle_c: 78.0
+  chip_critical_max_c: 85.0
+  liquid_return_sla_max_c: 40.0
+  dewpoint_safety_margin_c: 2.5
+
+economics:
+  utility_transformer_limit_kw: 1600.0
+  blended_electricity_usd_per_kwh: 0.115
+  off_peak_usd_per_kwh: 0.068
+  shoulder_usd_per_kwh: 0.115
+  peak_tou_usd_per_kwh: 0.185
+  critical_dr_usd_per_kwh: 0.285
+  monthly_demand_charge_usd_per_kw: 22.50
+  tier_iii_capex_usd_per_kw: 8500.0
+  legacy_baseline_pue: 1.345
+  wue_evap_factor_l_per_kwh: 1.45
+  grid_carbon_g_per_kwh_default: 310.0
+
+ups_units:
+  - ups_id: "UPS-A"
+    name: "UPS Module A (N+1)"
+    rated_capacity_kw: 1600.0
+  - ups_id: "UPS-B"
+    name: "UPS Module B (N+1)"
+    rated_capacity_kw: 1600.0
+
+crac_units:
+  - crac_id: "CRAC-1"
+    name: "CRAC North-West"
+    served_rows: ["ROW-A", "ROW-B"]
+    position: { x: -6.0, y: 1.2, z: -12.0 }
+    supply_air_setpoint_c: 17.5
+    initial_fan_speed_pct: 72.0
+    cooling_capacity_kw: 280.0
+    max_airflow_cfm: 36000.0
+  - crac_id: "CRAC-2"
+    name: "CRAC North-East"
+    served_rows: ["ROW-A", "ROW-B"]
+    position: { x: 6.0, y: 1.2, z: -12.0 }
+    supply_air_setpoint_c: 17.5
+    initial_fan_speed_pct: 72.0
+    cooling_capacity_kw: 280.0
+    max_airflow_cfm: 36000.0
+  - crac_id: "CRAC-3"
+    name: "CRAC South-West"
+    served_rows: ["ROW-C", "ROW-D"]
+    position: { x: -6.0, y: 1.2, z: 12.0 }
+    supply_air_setpoint_c: 18.5
+    initial_fan_speed_pct: 72.0
+    cooling_capacity_kw: 280.0
+    max_airflow_cfm: 36000.0
+  - crac_id: "CRAC-4"
+    name: "CRAC South-East"
+    served_rows: ["ROW-C", "ROW-D"]
+    position: { x: 6.0, y: 1.2, z: 12.0 }
+    supply_air_setpoint_c: 18.5
+    initial_fan_speed_pct: 72.0
+    cooling_capacity_kw: 280.0
+    max_airflow_cfm: 36000.0
+
+cdu_units:
+  - cdu_id: "CDU-1"
+    name: "Liquid CDU Alpha (Row C AI)"
+    served_rows: ["ROW-C"]
+    position: { x: 11.5, y: 1.1, z: 2.5 }
+    supply_temp_setpoint_c: 23.5
+    initial_pump_speed_pct: 80.0
+    cooling_capacity_kw: 850.0
+    max_flow_lpm: 560.0
+  - cdu_id: "CDU-2"
+    name: "Liquid CDU Beta (Row D AI)"
+    served_rows: ["ROW-D"]
+    position: { x: 11.5, y: 1.1, z: 7.5 }
+    supply_temp_setpoint_c: 24.5
+    initial_pump_speed_pct: 80.0
+    cooling_capacity_kw: 750.0
+    max_flow_lpm: 560.0
+
+rows:
+  - row_id: "ROW-A"
+    pdu_id: "PDU-A"
+    ups_id: "UPS-A"
+    pdu_rated_kw: 250.0
+    z_pos: -7.5
+    rack_count: 8
+    cooling_type: "air"
+    workload_class: "general_compute"
+    rack_max_kw: 18.0
+    gpus_per_rack: 0
+    nominal_r_th_c_per_kw: 0.082
+    nominal_c_th_kj_per_c: 410.0
+  - row_id: "ROW-B"
+    pdu_id: "PDU-B"
+    ups_id: "UPS-A"
+    pdu_rated_kw: 250.0
+    z_pos: -2.5
+    rack_count: 8
+    cooling_type: "air"
+    workload_class: "cloud_storage"
+    rack_max_kw: 22.0
+    gpus_per_rack: 4
+    nominal_r_th_c_per_kw: 0.078
+    nominal_c_th_kj_per_c: 445.0
+  - row_id: "ROW-C"
+    pdu_id: "PDU-C"
+    ups_id: "UPS-B"
+    pdu_rated_kw: 800.0
+    z_pos: 2.5
+    rack_count: 8
+    cooling_type: "hybrid_liquid"
+    workload_class: "llm_training"
+    rack_max_kw: 85.0
+    gpus_per_rack: 32
+    nominal_r_th_c_per_kw: 0.022
+    nominal_c_th_kj_per_c: 920.0
+  - row_id: "ROW-D"
+    pdu_id: "PDU-D"
+    ups_id: "UPS-B"
+    pdu_rated_kw: 800.0
+    z_pos: 7.5
+    rack_count: 8
+    cooling_type: "hybrid_liquid"
+    workload_class: "ai_inference"
+    rack_max_kw: 65.0
+    gpus_per_rack: 24
+    nominal_r_th_c_per_kw: 0.024
+    nominal_c_th_kj_per_c: 860.0

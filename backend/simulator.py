@@ -1,63 +1,70 @@
 """
-Physics-Informed High-Density AI Data Center Digital Twin Engine.
-Models:
-1. Graph Topology (NetworkX):
-   - 2 UPS Modules (UPS-A, UPS-B) -> 4 Row PDUs (PDU-A..D) -> 32 Racks (4 Rows x 8 Racks)
-   - 4 Perimeter CRAC Units (CRAC-1..4) supplying cold aisles
-   - 2 Direct-to-Chip Liquid Cooling Distribution Units (CDU-1, CDU-2) serving High-Density AI Rows C & D
-   - Central Chiller + Cooling Tower Plant
-2. coupled Electro-Thermal Physics:
-   - IT utilization -> server power + static leakage + cubic fan affinity laws
-   - Air vs. Direct-to-Chip liquid heat split (75% liquid capture on hybrid AI racks)
-   - Cold-aisle spatial temperature distribution + hot-aisle recirculation when airflow/cooling degrades
-   - Thermal capacitance ODE step (dT/dt) for realistic thermal inertia on chips and inlet air
-   - Chiller COP as a non-linear function of outdoor wet-bulb temp, part-load ratio, and supply water temp
+Config-Driven, Physics-Informed Data Center Digital Twin Engine.
+
+Loads facility topology, equipment ratings, ASHRAE limits, and site economics from a
+declarative `SiteBlueprintConfig` YAML (`configs/sites/*.yaml`) and executes coupled
+electro-thermal & hydraulic dynamics using `backend/domain/` physics primitives.
 """
 
 from __future__ import annotations
 import copy
 import math
 import time
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 import networkx as nx
 import numpy as np
 
+from config_loader import SiteBlueprintConfig, load_site_blueprint
+from domain import (
+    calc_air_loop_delta_t_c,
+    calc_liquid_loop_delta_t_c,
+    calc_pue,
+    calc_vfd_affinity_power_kw,
+    classify_rack_thermal_severity,
+)
 from models import (
+    CDUTelemetry,
+    CRACTelemetry,
     CoolingType,
-    WorkloadClass,
-    Severity,
+    FacilityMetrics,
+    PDUTelemetry,
     Position3D,
+    RackElevationResponse,
     RackSpec,
     RackTelemetry,
-    CRACTelemetry,
-    CDUTelemetry,
-    PDUTelemetry,
-    UPSTelemetry,
-    FacilityMetrics,
+    ServerNodeTelemetry,
+    Severity,
     TopologyEdge,
     UChassisType,
-    ServerNodeTelemetry,
-    RackElevationResponse,
+    UPSTelemetry,
 )
 
 
 class DataHallTwinEngine:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        config_path: Optional[str] = None,
+        site_config: Optional[SiteBlueprintConfig] = None,
+    ) -> None:
+        self.site_config: SiteBlueprintConfig = site_config or load_site_blueprint(config_path)
         self.rng = np.random.default_rng(42)
         self.sim_step: int = 0
         self.start_time: float = time.time()
-        self.outdoor_wetbulb_c: float = 19.5
-        self.outdoor_drybulb_c: float = 26.8
+        self.outdoor_wetbulb_c: float = self.site_config.ambient_defaults.outdoor_wetbulb_c
+        self.outdoor_drybulb_c: float = self.site_config.ambient_defaults.outdoor_drybulb_c
+        self.hall_relative_humidity_pct: float = self.site_config.ambient_defaults.hall_relative_humidity_pct
         self.auto_optimize: bool = False
         self.active_scenarios: List[str] = ["normal"]
 
-        # Scenario modifiers
-        self.row_load_boost_kw: Dict[str, float] = {"ROW-A": 0.0, "ROW-B": 0.0, "ROW-C": 0.0, "ROW-D": 0.0}
-        self.rack_recirc_fault: Dict[str, float] = {}  # rack_id -> extra recirculation °C
-        self.cdu_fouling_factor: Dict[str, float] = {"CDU-1": 1.0, "CDU-2": 1.0}  # <1.0 means degraded heat transfer
-        self.blade_overrides: Dict[str, Dict[str, Any]] = {}  # f"{rack_id}:{node_id}" -> fault/cap state
+        # Dynamic scenario modifiers keyed by configured IDs (zero hardcoded row/CDU names)
+        self.row_load_boost_kw: Dict[str, float] = {r.row_id: 0.0 for r in self.site_config.rows}
+        self.rack_recirc_fault: Dict[str, float] = {}
+        self.cdu_fouling_factor: Dict[str, float] = {c.cdu_id: 1.0 for c in self.site_config.cdu_units}
+        self.crac_max_cfm_map: Dict[str, float] = {c.crac_id: c.max_airflow_cfm for c in self.site_config.crac_units}
+        self.cdu_max_lpm_map: Dict[str, float] = {c.cdu_id: c.max_flow_lpm for c in self.site_config.cdu_units}
+        self.blade_overrides: Dict[str, Dict[str, Any]] = {}
 
-        # Build topology & state
+        # Build topology & live telemetry state
         self.graph = nx.DiGraph()
         self.rack_specs: Dict[str, RackSpec] = {}
         self.racks: Dict[str, RackTelemetry] = {}
@@ -67,119 +74,102 @@ class DataHallTwinEngine:
         self.ups_units: Dict[str, UPSTelemetry] = {}
         self.history: List[FacilityMetrics] = []
 
-        self._init_topology()
-        # Warm-up 45 steps so history is populated immediately on launch
+        self._init_topology_from_blueprint()
         for _ in range(45):
             self.step(dt_sec=2.0)
 
-    def _init_topology(self) -> None:
-        # 1. UPS Units
-        self.ups_units = {
-            "UPS-A": UPSTelemetry(ups_id="UPS-A", name="UPS Module A (N+1)", rated_capacity_kw=1600.0),
-            "UPS-B": UPSTelemetry(ups_id="UPS-B", name="UPS Module B (N+1)", rated_capacity_kw=1600.0),
-        }
-        for ups_id in self.ups_units:
-            self.graph.add_node(ups_id, type="ups")
+    def _init_topology_from_blueprint(self) -> None:
+        cfg = self.site_config
 
-        # 2. Row PDUs
-        row_configs = [
-            ("ROW-A", "PDU-A", "UPS-A", -7.5, CoolingType.AIR, WorkloadClass.GENERAL_COMPUTE, 18.0, 0),
-            ("ROW-B", "PDU-B", "UPS-A", -2.5, CoolingType.AIR, WorkloadClass.CLOUD_STORAGE, 22.0, 4),
-            ("ROW-C", "PDU-C", "UPS-B", 2.5, CoolingType.HYBRID_LIQUID, WorkloadClass.LLM_TRAINING, 85.0, 32),
-            ("ROW-D", "PDU-D", "UPS-B", 7.5, CoolingType.HYBRID_LIQUID, WorkloadClass.AI_INFERENCE, 65.0, 24),
-        ]
-
-        for row_id, pdu_id, ups_id, z_pos, _, _, max_kw, _ in row_configs:
-            rated = 250.0 if max_kw < 30 else 800.0
-            self.pdus[pdu_id] = PDUTelemetry(
-                pdu_id=pdu_id,
-                name=f"{row_id} Power Distribution",
-                row_id=row_id,
-                ups_id=ups_id,
-                position=Position3D(x=-11.5, y=1.1, z=z_pos),
-                rated_capacity_kw=rated,
+        # 1. UPS Modules
+        for u_cfg in cfg.ups_units:
+            self.ups_units[u_cfg.ups_id] = UPSTelemetry(
+                ups_id=u_cfg.ups_id,
+                name=u_cfg.name,
+                rated_capacity_kw=u_cfg.rated_capacity_kw,
             )
-            self.graph.add_node(pdu_id, type="pdu", row_id=row_id)
-            self.graph.add_edge(ups_id, pdu_id, layer="power", capacity_kw=rated)
+            self.graph.add_node(u_cfg.ups_id, type="ups")
 
-        # 3. Perimeter CRAC Units (Air Cooling)
-        crac_configs = [
-            ("CRAC-1", "CRAC North-West", ["ROW-A", "ROW-B"], Position3D(x=-6.0, y=1.2, z=-12.0), 17.5),
-            ("CRAC-2", "CRAC North-East", ["ROW-A", "ROW-B"], Position3D(x=6.0, y=1.2, z=-12.0), 17.5),
-            ("CRAC-3", "CRAC South-West", ["ROW-C", "ROW-D"], Position3D(x=-6.0, y=1.2, z=12.0), 18.5),
-            ("CRAC-4", "CRAC South-East", ["ROW-C", "ROW-D"], Position3D(x=6.0, y=1.2, z=12.0), 18.5),
-        ]
-        for crac_id, name, rows, pos, sp in crac_configs:
-            self.cracs[crac_id] = CRACTelemetry(
-                crac_id=crac_id,
-                name=name,
-                served_rows=rows,
-                position=pos,
-                supply_air_setpoint_c=sp,
-                supply_air_temp_c=sp,
-                fan_speed_pct=72.0,
-                cooling_capacity_kw=280.0,
+        # 2. CRAC Air Units
+        for c_cfg in cfg.crac_units:
+            self.cracs[c_cfg.crac_id] = CRACTelemetry(
+                crac_id=c_cfg.crac_id,
+                name=c_cfg.name,
+                served_rows=list(c_cfg.served_rows),
+                position=c_cfg.position,
+                supply_air_setpoint_c=c_cfg.supply_air_setpoint_c,
+                supply_air_temp_c=c_cfg.supply_air_setpoint_c,
+                fan_speed_pct=c_cfg.initial_fan_speed_pct,
+                cooling_capacity_kw=c_cfg.cooling_capacity_kw,
             )
-            self.graph.add_node(crac_id, type="crac")
+            self.graph.add_node(c_cfg.crac_id, type="crac")
 
-        # 4. Liquid Cooling Distribution Units (CDUs for Rows C & D)
-        cdu_configs = [
-            ("CDU-1", "Liquid CDU Alpha (Row C AI)", ["ROW-C"], Position3D(x=11.5, y=1.1, z=2.5), 23.5, 850.0),
-            ("CDU-2", "Liquid CDU Beta (Row D AI)", ["ROW-D"], Position3D(x=11.5, y=1.1, z=7.5), 24.5, 750.0),
-        ]
-        for cdu_id, name, rows, pos, sp, cap in cdu_configs:
-            self.cdus[cdu_id] = CDUTelemetry(
-                cdu_id=cdu_id,
-                name=name,
-                served_rows=rows,
-                position=pos,
-                supply_temp_setpoint_c=sp,
-                supply_temp_c=sp,
-                pump_speed_pct=80.0,
-                cooling_capacity_kw=cap,
+        # 3. Liquid CDUs
+        for cdu_cfg in cfg.cdu_units:
+            self.cdus[cdu_cfg.cdu_id] = CDUTelemetry(
+                cdu_id=cdu_cfg.cdu_id,
+                name=cdu_cfg.name,
+                served_rows=list(cdu_cfg.served_rows),
+                position=cdu_cfg.position,
+                supply_temp_setpoint_c=cdu_cfg.supply_temp_setpoint_c,
+                supply_temp_c=cdu_cfg.supply_temp_setpoint_c,
+                pump_speed_pct=cdu_cfg.initial_pump_speed_pct,
+                cooling_capacity_kw=cdu_cfg.cooling_capacity_kw,
             )
-            self.graph.add_node(cdu_id, type="cdu")
+            self.graph.add_node(cdu_cfg.cdu_id, type="cdu")
 
-        # 5. 32 Racks (4 Rows x 8 Racks per Row)
-        for row_id, pdu_id, _, z_pos, cooling_type, workload, max_kw, gpus in row_configs:
-            row_letter = row_id.split("-")[1]
-            cdu_id = "CDU-1" if row_id == "ROW-C" else ("CDU-2" if row_id == "ROW-D" else None)
-            crac_zones = ["CRAC-1", "CRAC-2"] if row_id in ("ROW-A", "ROW-B") else ["CRAC-3", "CRAC-4"]
+        # 4. Rows, Row PDUs, and Racks
+        for row_cfg in cfg.rows:
+            self.pdus[row_cfg.pdu_id] = PDUTelemetry(
+                pdu_id=row_cfg.pdu_id,
+                name=f"{row_cfg.row_id} Power Distribution",
+                row_id=row_cfg.row_id,
+                ups_id=row_cfg.ups_id,
+                position=Position3D(x=-11.5, y=1.1, z=row_cfg.z_pos),
+                rated_capacity_kw=row_cfg.pdu_rated_kw,
+            )
+            self.graph.add_node(row_cfg.pdu_id, type="pdu", row_id=row_cfg.row_id)
+            self.graph.add_edge(row_cfg.ups_id, row_cfg.pdu_id, layer="power", capacity_kw=row_cfg.pdu_rated_kw)
 
-            for slot in range(1, 9):
-                rack_id = f"R-{row_letter}{slot:02d}"
-                x_pos = -7.8 + (slot - 1) * 2.2
-                pos = Position3D(x=round(x_pos, 2), y=1.0, z=z_pos)
+            row_suffix = row_cfg.row_id.split("-")[-1]
+            cdu_id = next((c.cdu_id for c in cfg.cdu_units if row_cfg.row_id in c.served_rows), None)
+            crac_zones = [c.crac_id for c in cfg.crac_units if row_cfg.row_id in c.served_rows]
+
+            span_half = ((row_cfg.rack_count - 1) * 2.2) / 2.0
+            for slot in range(1, row_cfg.rack_count + 1):
+                rack_id = f"R-{row_suffix}{slot:02d}"
+                x_pos = -span_half + (slot - 1) * 2.2
+                pos = Position3D(x=round(x_pos, 2), y=1.0, z=row_cfg.z_pos)
 
                 spec = RackSpec(
                     rack_id=rack_id,
-                    row_id=row_id,
+                    row_id=row_cfg.row_id,
                     slot_index=slot,
-                    name=f"Rack {row_letter}{slot:02d} ({workload.value.replace('_', ' ').title()})",
-                    cooling_type=cooling_type,
-                    workload_class=workload,
-                    max_power_kw=max_kw,
-                    gpu_count=gpus,
-                    pdu_id=pdu_id,
+                    name=f"Rack {row_suffix}{slot:02d} ({row_cfg.workload_class.value.replace('_', ' ').title()})",
+                    cooling_type=row_cfg.cooling_type,
+                    workload_class=row_cfg.workload_class,
+                    max_power_kw=row_cfg.rack_max_kw,
+                    gpu_count=row_cfg.gpus_per_rack,
+                    pdu_id=row_cfg.pdu_id,
                     cdu_id=cdu_id,
                     crac_zone_ids=crac_zones,
                     position=pos,
                 )
                 self.rack_specs[rack_id] = spec
 
-                # Initial utilization profile: higher in middle racks of AI clusters
-                base_util = 58.0 + 14.0 * math.sin(slot * 0.6) if cooling_type == CoolingType.HYBRID_LIQUID else 46.0 + 10.0 * math.cos(slot * 0.5)
-                init_power = max_kw * (0.15 + 0.85 * (base_util / 100.0))
+                is_liq = row_cfg.cooling_type == CoolingType.HYBRID_LIQUID
+                base_util = 58.0 + 14.0 * math.sin(slot * 0.6) if is_liq else 46.0 + 10.0 * math.cos(slot * 0.5)
+                init_power = row_cfg.rack_max_kw * (0.15 + 0.85 * (base_util / 100.0))
 
                 self.racks[rack_id] = RackTelemetry(
                     rack_id=rack_id,
-                    row_id=row_id,
+                    row_id=row_cfg.row_id,
                     name=spec.name,
-                    cooling_type=cooling_type,
-                    workload_class=workload,
-                    max_power_kw=max_kw,
-                    gpu_count=gpus,
-                    pdu_id=pdu_id,
+                    cooling_type=row_cfg.cooling_type,
+                    workload_class=row_cfg.workload_class,
+                    max_power_kw=row_cfg.rack_max_kw,
+                    gpu_count=row_cfg.gpus_per_rack,
+                    pdu_id=row_cfg.pdu_id,
                     cdu_id=cdu_id,
                     position=pos,
                     it_utilization_pct=round(base_util, 1),
@@ -197,12 +187,32 @@ class DataHallTwinEngine:
                     thermal_margin_c=28.0,
                 )
 
-                self.graph.add_node(rack_id, type="rack", row_id=row_id)
-                self.graph.add_edge(pdu_id, rack_id, layer="power", capacity_kw=max_kw)
+                self.graph.add_node(rack_id, type="rack", row_id=row_cfg.row_id)
+                self.graph.add_edge(row_cfg.pdu_id, rack_id, layer="power", capacity_kw=row_cfg.rack_max_kw)
                 for cid in crac_zones:
-                    self.graph.add_edge(cid, rack_id, layer="air_cooling", capacity_kw=max_kw)
+                    self.graph.add_edge(cid, rack_id, layer="air_cooling", capacity_kw=row_cfg.rack_max_kw)
                 if cdu_id:
-                    self.graph.add_edge(cdu_id, rack_id, layer="liquid_cooling", capacity_kw=max_kw * 0.8)
+                    self.graph.add_edge(cdu_id, rack_id, layer="liquid_cooling", capacity_kw=row_cfg.rack_max_kw * 0.8)
+
+    # --- Topology Query Helpers (Use these instead of hardcoding asset IDs!) ---
+
+    def get_racks_for_rows(self, row_ids: List[str]) -> List[RackTelemetry]:
+        row_set = set(row_ids)
+        return [r for r in self.racks.values() if r.row_id in row_set]
+
+    def get_downstream_racks(self, asset_id: str) -> List[RackTelemetry]:
+        """Traverse `self.graph` outgoing edges (1 or 2 hops, e.g. UPS -> PDU -> Rack) to find served racks."""
+        if asset_id not in self.graph:
+            return []
+        found: Dict[str, RackTelemetry] = {}
+        for _, target in self.graph.out_edges(asset_id):
+            if target in self.racks:
+                found[target] = self.racks[target]
+            elif target in self.pdus:
+                for _, rk_id in self.graph.out_edges(target):
+                    if rk_id in self.racks:
+                        found[rk_id] = self.racks[rk_id]
+        return [found[k] for k in sorted(found.keys())]
 
     def get_topology_edges(self) -> List[TopologyEdge]:
         edges: List[TopologyEdge] = []
@@ -215,31 +225,42 @@ class DataHallTwinEngine:
                 if layer == "power":
                     flow = rk.power_kw
                 elif layer == "air_cooling":
-                    flow = rk.air_power_kw / 2.0
+                    peer_count = max(1, len(self.rack_specs[v].crac_zone_ids))
+                    flow = rk.air_power_kw / peer_count
                 elif layer == "liquid_cooling":
                     flow = rk.liquid_power_kw
             elif v in self.pdus:
                 flow = self.pdus[v].current_load_kw
-            edges.append(TopologyEdge(source=u, target=v, layer=layer, capacity_kw=round(cap, 1), current_flow_kw=round(flow, 2)))
+            edges.append(
+                TopologyEdge(
+                    source=u,
+                    target=v,
+                    layer=layer,
+                    capacity_kw=round(cap, 1),
+                    current_flow_kw=round(flow, 2),
+                )
+            )
         return edges
 
     def trigger_scenario(self, scenario_id: str) -> None:
-        # Reset baseline faults first if switching to "normal"
+        cfg = self.site_config
         if scenario_id == "normal":
             self.active_scenarios = ["normal"]
             self.row_load_boost_kw = {k: 0.0 for k in self.row_load_boost_kw}
             self.rack_recirc_fault.clear()
-            self.cdu_fouling_factor = {"CDU-1": 1.0, "CDU-2": 1.0}
-            self.outdoor_wetbulb_c = 19.5
-            self.outdoor_drybulb_c = 26.8
-            for crac in self.cracs.values():
+            self.cdu_fouling_factor = {c.cdu_id: 1.0 for c in cfg.cdu_units}
+            self.outdoor_wetbulb_c = cfg.ambient_defaults.outdoor_wetbulb_c
+            self.outdoor_drybulb_c = cfg.ambient_defaults.outdoor_drybulb_c
+            for crac_cfg in cfg.crac_units:
+                crac = self.cracs[crac_cfg.crac_id]
                 crac.enabled = True
-                crac.fan_speed_pct = 74.0
-                crac.supply_air_setpoint_c = 18.0
-            for cdu in self.cdus.values():
+                crac.fan_speed_pct = crac_cfg.initial_fan_speed_pct
+                crac.supply_air_setpoint_c = crac_cfg.supply_air_setpoint_c
+            for cdu_cfg in cfg.cdu_units:
+                cdu = self.cdus[cdu_cfg.cdu_id]
                 cdu.enabled = True
-                cdu.pump_speed_pct = 80.0
-                cdu.supply_temp_setpoint_c = 24.0
+                cdu.pump_speed_pct = cdu_cfg.initial_pump_speed_pct
+                cdu.supply_temp_setpoint_c = cdu_cfg.supply_temp_setpoint_c
             return
 
         if "normal" in self.active_scenarios:
@@ -247,53 +268,64 @@ class DataHallTwinEngine:
         if scenario_id not in self.active_scenarios:
             self.active_scenarios.append(scenario_id)
 
-        if scenario_id == "gpu_burst_row_c":
-            # Synchronized LLM checkpoint + training spike in Row C
-            self.row_load_boost_kw["ROW-C"] = 18.0
-        elif scenario_id == "crac_2_fail":
-            # CRAC-2 blower trip -> North-East air cooling degradation + recirculation
-            self.cracs["CRAC-2"].enabled = False
-            self.cracs["CRAC-2"].fan_speed_pct = 0.0
-        elif scenario_id == "cdu_1_fouling":
-            # CDU-1 heat exchanger fouling / pump cavitation on Row C AI cluster
-            self.cdu_fouling_factor["CDU-1"] = 0.58
-            self.cdus["CDU-1"].pump_speed_pct = 48.0
+        liquid_rows = [r.row_id for r in cfg.rows if r.cooling_type == CoolingType.HYBRID_LIQUID]
+        crac_ids = list(self.cracs.keys())
+        cdu_ids = list(self.cdus.keys())
+
+        if scenario_id == "gpu_burst_row_c" and liquid_rows:
+            target_row = "ROW-C" if "ROW-C" in self.row_load_boost_kw else liquid_rows[0]
+            self.row_load_boost_kw[target_row] = 18.0
+        elif scenario_id == "crac_2_fail" and crac_ids:
+            target_crac = "CRAC-2" if "CRAC-2" in self.cracs else crac_ids[min(1, len(crac_ids) - 1)]
+            self.cracs[target_crac].enabled = False
+            self.cracs[target_crac].fan_speed_pct = 0.0
+        elif scenario_id == "cdu_1_fouling" and cdu_ids:
+            target_cdu = "CDU-1" if "CDU-1" in self.cdus else cdu_ids[0]
+            self.cdu_fouling_factor[target_cdu] = 0.58
+            self.cdus[target_cdu].pump_speed_pct = 48.0
         elif scenario_id == "heatwave":
-            # Extreme ambient heatwave -> wet-bulb rises to 28.5°C, chiller COP drops
             self.outdoor_wetbulb_c = 28.5
             self.outdoor_drybulb_c = 39.2
         elif scenario_id == "hot_aisle_recirc":
-            # Containment damper stuck open near R-B06, R-B07, R-C05, R-C06
-            for rid in ("R-B06", "R-B07", "R-C05", "R-C06"):
+            preferred = [rid for rid in ("R-B06", "R-B07", "R-C05", "R-C06") if rid in self.racks]
+            targets = preferred or list(self.racks.keys())[-3:]
+            for rid in targets:
                 self.rack_recirc_fault[rid] = 6.5
 
     def step(self, dt_sec: float = 2.0) -> FacilityMetrics:
         self.sim_step += 1
         t = self.sim_step * dt_sec
+        limits = self.site_config.ashrae_limits
+        econ = self.site_config.economics
 
-        # If AI Auto-Pilot optimization is active, dynamically tune CRAC & CDU setpoints
         if self.auto_optimize:
             self._apply_autopilot_control()
 
-        # 1. Update CRAC supply temperatures (first-order lag toward setpoint)
-        for crac in self.cracs.values():
+        # 1. Update CRAC supply temperatures & VFD cubic affinity power
+        for crac_id, crac in self.cracs.items():
+            max_cfm = self.crac_max_cfm_map.get(crac_id, 36000.0)
             if not crac.enabled or crac.fan_speed_pct <= 5.0:
                 crac.airflow_cfm = 0.0
-                crac.power_kw = 0.4  # standby electronics
+                crac.power_kw = 0.4
                 crac.supply_air_temp_c += (26.5 - crac.supply_air_temp_c) * 0.25
                 crac.thermal_load_kw = 0.0
                 crac.status = Severity.CRITICAL
             else:
                 noise = float(self.rng.normal(0.0, 0.05))
                 crac.supply_air_temp_c += (crac.supply_air_setpoint_c - crac.supply_air_temp_c) * 0.35 + noise
-                crac.airflow_cfm = 36000.0 * (crac.fan_speed_pct / 100.0)
-                # Fan affinity law: power ~ (fan_speed)^3
-                crac.power_kw = round(3.2 + 28.0 * ((crac.fan_speed_pct / 100.0) ** 3), 2)
+                crac.airflow_cfm = max_cfm * (crac.fan_speed_pct / 100.0)
+                crac.power_kw = calc_vfd_affinity_power_kw(
+                    speed_pct=crac.fan_speed_pct,
+                    rated_dynamic_kw=28.0,
+                    standby_kw=3.2,
+                    exponent=3.0,
+                )
                 crac.status = Severity.NORMAL
 
-        # 2. Update CDU liquid supply temperatures & flow rates
+        # 2. Update CDU liquid supply temperatures, flow rates & VFD pump power
         for cdu_id, cdu in self.cdus.items():
             fouling = self.cdu_fouling_factor.get(cdu_id, 1.0)
+            max_lpm = self.cdu_max_lpm_map.get(cdu_id, 560.0)
             if not cdu.enabled or cdu.pump_speed_pct <= 5.0:
                 cdu.total_flow_lpm = 10.0
                 cdu.power_kw = 0.5
@@ -303,23 +335,28 @@ class DataHallTwinEngine:
                 noise = float(self.rng.normal(0.0, 0.04))
                 effective_setpoint = cdu.supply_temp_setpoint_c + (1.0 - fouling) * 6.5
                 cdu.supply_temp_c += (effective_setpoint - cdu.supply_temp_c) * 0.35 + noise
-                cdu.total_flow_lpm = round(560.0 * (cdu.pump_speed_pct / 100.0) * fouling, 1)
+                cdu.total_flow_lpm = round(max_lpm * (cdu.pump_speed_pct / 100.0) * fouling, 1)
                 cdu.pressure_kpa = round(220.0 * ((cdu.pump_speed_pct / 100.0) ** 1.8) / max(fouling, 0.4), 1)
-                cdu.power_kw = round(2.0 + 18.5 * ((cdu.pump_speed_pct / 100.0) ** 2.8), 2)
+                cdu.power_kw = calc_vfd_affinity_power_kw(
+                    speed_pct=cdu.pump_speed_pct,
+                    rated_dynamic_kw=18.5,
+                    standby_kw=2.0,
+                    exponent=2.8,
+                )
                 cdu.status = Severity.WARNING if fouling < 0.8 else Severity.NORMAL
 
         # 3. Update Rack IT Loads, Power, and Coupled Air/Liquid Thermal Dynamics
-        row_air_heat: Dict[str, float] = {"ROW-A": 0.0, "ROW-B": 0.0, "ROW-C": 0.0, "ROW-D": 0.0}
-        cdu_liquid_heat: Dict[str, float] = {"CDU-1": 0.0, "CDU-2": 0.0}
+        row_air_heat: Dict[str, float] = {r.row_id: 0.0 for r in self.site_config.rows}
+        cdu_liquid_heat: Dict[str, float] = {c.cdu_id: 0.0 for c in self.site_config.cdu_units}
 
         for rack_id, rk in self.racks.items():
             spec = self.rack_specs[rack_id]
             slot = spec.slot_index
+            is_liq = rk.cooling_type == CoolingType.HYBRID_LIQUID
 
-            # Realistic time-varying workload pattern: harmonic diurnal/job wave + stochastic micro-bursts
-            phase = slot * 0.55 + (0.0 if rk.row_id in ("ROW-A", "ROW-B") else 1.4)
+            phase = slot * 0.55 + (1.4 if is_liq else 0.0)
             wave = 8.0 * math.sin(t * 0.035 + phase) + 4.5 * math.cos(t * 0.09 - slot)
-            base_target = 64.0 if rk.cooling_type == CoolingType.HYBRID_LIQUID else 48.0
+            base_target = 64.0 if is_liq else 48.0
             boost_kw = self.row_load_boost_kw.get(rk.row_id, 0.0)
             boost_util = (boost_kw / rk.max_power_kw) * 100.0
 
@@ -329,29 +366,24 @@ class DataHallTwinEngine:
                 99.5,
             )
             rk.it_utilization_pct = round(0.72 * rk.it_utilization_pct + 0.28 * float(target_util), 1)
-
-            # Server electrical power = idle static leakage (14%) + dynamic compute power + internal server fan power
             compute_kw = rk.max_power_kw * (0.14 + 0.82 * (rk.it_utilization_pct / 100.0))
 
-            # Calculate cold aisle air inlet temperature for this rack
-            served_cracs = [self.cracs[cid] for cid in spec.crac_zone_ids]
+            served_cracs = [self.cracs[cid] for cid in spec.crac_zone_ids if cid in self.cracs]
             active_cracs = [c for c in served_cracs if c.enabled and c.airflow_cfm > 1000]
             if not active_cracs:
                 supply_air_c = 27.5
                 total_zone_cfm = 2000.0
             else:
-                # Distance-weighted supply air temperature (CRAC-1/3 at West x=-6, CRAC-2/4 at East x=+6)
-                weights = []
-                for c in active_cracs:
-                    dist = abs(rk.position.x - c.position.x) + 2.0
-                    weights.append((c.airflow_cfm / dist, c.supply_air_temp_c))
+                weights = [(c.airflow_cfm / (abs(rk.position.x - c.position.x) + 2.0), c.supply_air_temp_c) for c in active_cracs]
                 w_sum = sum(w for w, _ in weights)
                 supply_air_c = sum(w * temp for w, temp in weights) / max(w_sum, 1e-3)
                 total_zone_cfm = sum(c.airflow_cfm for c in active_cracs)
 
-            # End-of-row recirculation effect & deficit airflow penalty
-            edge_recirc = 0.85 if slot in (1, 8) else 0.25
-            airflow_deficit_c = max(0.0, (42000.0 - total_zone_cfm) / 8000.0) * (1.2 + 0.15 * slot)
+            row_cfg = next((rc for rc in self.site_config.rows if rc.row_id == rk.row_id), None)
+            row_len = row_cfg.rack_count if row_cfg else 8
+            edge_recirc = 0.85 if slot in (1, row_len) else 0.25
+            nominal_zone_cfm = max(24000.0, 21000.0 * len(served_cracs))
+            airflow_deficit_c = max(0.0, (nominal_zone_cfm - total_zone_cfm) / 8000.0) * (1.2 + 0.15 * slot)
             fault_recirc_c = self.rack_recirc_fault.get(rack_id, 0.0)
 
             target_inlet_c = (
@@ -362,41 +394,36 @@ class DataHallTwinEngine:
                 + 0.025 * compute_kw
                 + float(self.rng.normal(0.0, 0.08))
             )
-            # Thermal inertia on inlet sensor
             rk.inlet_temp_c = round(0.68 * rk.inlet_temp_c + 0.32 * target_inlet_c, 2)
 
-            # Server internal fans spin up non-linearly when inlet temp or chip temp rises
             temp_drive = max(0.0, (rk.inlet_temp_c - 18.0) / 12.0)
-            fan_fraction = np.clip(0.35 + 0.50 * (rk.it_utilization_pct / 100.0) + 0.35 * temp_drive, 0.30, 1.0)
+            fan_fraction = float(np.clip(0.35 + 0.50 * (rk.it_utilization_pct / 100.0) + 0.35 * temp_drive, 0.30, 1.0))
             max_fan_kw = 1.6 if rk.cooling_type == CoolingType.AIR else 2.4
             rk.fan_power_kw = round(max_fan_kw * (fan_fraction ** 3), 2)
             rk.power_kw = round(compute_kw + rk.fan_power_kw, 2)
 
-            if rk.cooling_type == CoolingType.HYBRID_LIQUID and rk.cdu_id:
+            if is_liq and rk.cdu_id and rk.cdu_id in self.cdus:
                 cdu = self.cdus[rk.cdu_id]
                 fouling = self.cdu_fouling_factor.get(rk.cdu_id, 1.0)
-                # Direct-to-chip cold plates capture ~76% of heat under healthy flow, less if fouled
-                liquid_capture_ratio = 0.76 * min(1.0, (cdu.total_flow_lpm / 360.0))
+                cdu_served_racks = max(1, len(self.get_downstream_racks(rk.cdu_id)))
+                liquid_capture_ratio = 0.76 * min(1.0, (cdu.total_flow_lpm / max(120.0, 45.0 * cdu_served_racks)))
                 rk.liquid_power_kw = round(rk.power_kw * liquid_capture_ratio, 2)
                 rk.air_power_kw = round(rk.power_kw - rk.liquid_power_kw, 2)
 
-                # Per-rack coolant flow in LPM (8 racks per CDU)
-                rack_flow_lpm = max(8.0, (cdu.total_flow_lpm / 8.0) * (0.92 + 0.16 * (rk.power_kw / rk.max_power_kw)))
+                rack_flow_lpm = max(
+                    8.0,
+                    (cdu.total_flow_lpm / cdu_served_racks) * (0.92 + 0.16 * (rk.power_kw / rk.max_power_kw)),
+                )
                 rk.coolant_flow_lpm = round(rack_flow_lpm, 1)
                 rk.coolant_supply_temp_c = round(cdu.supply_temp_c, 2)
-
-                # Q = m_dot * Cp * dT -> Cp of water/glycol ~ 3.95 kJ/(kg*K) -> 0.0658 kW/(LPM*K)
-                delta_t_liquid = rk.liquid_power_kw / max(rack_flow_lpm * 0.0658, 0.3)
+                delta_t_liquid = calc_liquid_loop_delta_t_c(rk.liquid_power_kw, rack_flow_lpm)
                 rk.coolant_return_temp_c = round(rk.coolant_supply_temp_c + delta_t_liquid, 2)
 
-                # Air exhaust for remaining 24% heat
                 rk.airflow_cfm = round(1350.0 * fan_fraction, 0)
-                # Air deltaT: Q_air (kW) * 3160 / CFM (in °F) -> / 1.8 for °C => Q_air * 1755 / CFM
-                delta_t_air = (rk.air_power_kw * 1755.0) / max(rk.airflow_cfm, 250.0)
+                delta_t_air = calc_air_loop_delta_t_c(rk.air_power_kw, max(250.0, rk.airflow_cfm))
                 rk.outlet_temp_c = round(rk.inlet_temp_c + delta_t_air, 2)
 
-                # GPU junction temperature: cold plate supply + thermal resistance * load + fouling penalty
-                r_th_chip = 0.34 / max(fouling, 0.45)  # °C per kW
+                r_th_chip = 0.34 / max(fouling, 0.45)
                 target_chip_c = (
                     rk.coolant_supply_temp_c
                     + 8.5
@@ -413,70 +440,71 @@ class DataHallTwinEngine:
                 rk.coolant_flow_lpm = None
 
                 rk.airflow_cfm = round(2100.0 * fan_fraction, 0)
-                delta_t_air = (rk.air_power_kw * 1755.0) / max(rk.airflow_cfm, 300.0)
+                delta_t_air = calc_air_loop_delta_t_c(rk.air_power_kw, max(300.0, rk.airflow_cfm))
                 rk.outlet_temp_c = round(rk.inlet_temp_c + delta_t_air, 2)
 
                 target_chip_c = rk.inlet_temp_c + 14.0 + 1.45 * rk.power_kw
                 rk.chip_temp_c = round(0.65 * rk.chip_temp_c + 0.35 * target_chip_c, 2)
 
-            row_air_heat[rk.row_id] += rk.air_power_kw
+            row_air_heat[rk.row_id] = row_air_heat.get(rk.row_id, 0.0) + rk.air_power_kw
 
-            # Thermal margin and severity classification
-            inlet_margin = 32.0 - rk.inlet_temp_c
-            chip_margin = 85.0 - rk.chip_temp_c
+            inlet_margin = limits.air_inlet_allowable_max_c - rk.inlet_temp_c
+            chip_margin = limits.chip_critical_max_c - rk.chip_temp_c
             rk.thermal_margin_c = round(min(inlet_margin * 2.2, chip_margin), 1)
 
             faults: List[str] = []
             if rk.inlet_temp_c >= 29.5:
                 faults.append("High Inlet Air Temperature (ASHRAE A1 Exceeded)")
-            elif rk.inlet_temp_c >= 27.0:
+            elif rk.inlet_temp_c >= limits.air_inlet_recommend_max_c:
                 faults.append("Elevated Cold-Aisle Inlet Temp")
-            if rk.chip_temp_c >= 78.0:
-                faults.append("GPU Junction Near Thermal Throttling")
+            if rk.chip_temp_c >= limits.chip_throttle_c:
+                faults.append("Silicon Junction Near Thermal Limit")
             if rack_id in self.rack_recirc_fault:
                 faults.append("Hot-Aisle Containment Recirculation Detected")
             rk.active_faults = faults
 
-            if rk.chip_temp_c >= 78.0 or rk.inlet_temp_c >= 29.5:
-                rk.status = Severity.CRITICAL
-            elif rk.chip_temp_c >= 70.0 or rk.inlet_temp_c >= 27.0 or faults:
-                rk.status = Severity.WARNING
-            elif rk.chip_temp_c >= 65.0 or rk.inlet_temp_c >= 25.0:
-                rk.status = Severity.ADVISORY
+            rk.status = classify_rack_thermal_severity(
+                inlet_temp_c=rk.inlet_temp_c,
+                chip_temp_c=rk.chip_temp_c,
+                has_recirc_fault=bool(faults),
+                inlet_sla_max_c=limits.air_inlet_recommend_max_c,
+                inlet_critical_c=29.5,
+                chip_warning_c=limits.chip_warning_c,
+                chip_critical_c=limits.chip_throttle_c,
+            )
+
+        # 4. Dynamically roll up air heat to CRAC zones based on `served_rows`
+        row_active_cfm: Dict[str, float] = {}
+        for row_id in row_air_heat:
+            row_active_cfm[row_id] = sum(
+                c.airflow_cfm for c in self.cracs.values() if c.enabled and row_id in c.served_rows
+            )
+
+        for crac in self.cracs.values():
+            if crac.enabled and crac.airflow_cfm > 0:
+                captured_heat_kw = 0.0
+                for r_id in crac.served_rows:
+                    tot_cfm = row_active_cfm.get(r_id, 0.0)
+                    if tot_cfm > 0:
+                        captured_heat_kw += row_air_heat.get(r_id, 0.0) * (crac.airflow_cfm / tot_cfm)
+                crac.thermal_load_kw = round(captured_heat_kw, 1)
+                delta_air = calc_air_loop_delta_t_c(crac.thermal_load_kw, max(1000.0, crac.airflow_cfm))
+                crac.return_air_temp_c = round(crac.supply_air_temp_c + delta_air, 2)
             else:
-                rk.status = Severity.NORMAL
-
-        # 4. Roll up thermal loads to CRACs and CDUs
-        north_air_kw = row_air_heat["ROW-A"] + row_air_heat["ROW-B"]
-        south_air_kw = row_air_heat["ROW-C"] + row_air_heat["ROW-D"]
-
-        for zone_cracs, zone_heat in (
-            ([self.cracs["CRAC-1"], self.cracs["CRAC-2"]], north_air_kw),
-            ([self.cracs["CRAC-3"], self.cracs["CRAC-4"]], south_air_kw),
-        ):
-            total_cfm = sum(c.airflow_cfm for c in zone_cracs if c.enabled)
-            for c in zone_cracs:
-                if c.enabled and total_cfm > 0:
-                    share = c.airflow_cfm / total_cfm
-                    c.thermal_load_kw = round(zone_heat * share, 1)
-                    delta_air = (c.thermal_load_kw * 1755.0) / max(c.airflow_cfm, 1000.0)
-                    c.return_air_temp_c = round(c.supply_air_temp_c + delta_air, 2)
-                else:
-                    c.thermal_load_kw = 0.0
-                    c.return_air_temp_c = 31.5
+                crac.thermal_load_kw = 0.0
+                crac.return_air_temp_c = 31.5
 
         for cdu_id, cdu in self.cdus.items():
             cdu.thermal_load_kw = round(cdu_liquid_heat.get(cdu_id, 0.0), 1)
             if cdu.total_flow_lpm > 1.0:
                 cdu.return_temp_c = round(
-                    cdu.supply_temp_c + cdu.thermal_load_kw / (cdu.total_flow_lpm * 0.0658), 2
+                    cdu.supply_temp_c + calc_liquid_loop_delta_t_c(cdu.thermal_load_kw, cdu.total_flow_lpm), 2
                 )
 
-        # 5. Roll up electrical power to PDUs & UPS modules
+        # 5. Roll up electrical power to PDUs & UPS modules via topology bindings
         for pdu in self.pdus.values():
             row_racks = [r for r in self.racks.values() if r.pdu_id == pdu.pdu_id]
             it_sum = sum(r.power_kw for r in row_racks)
-            # Transformer + distribution loss ~ 1.8%
             pdu.loss_kw = round(it_sum * 0.018, 2)
             pdu.current_load_kw = round(it_sum + pdu.loss_kw, 2)
             pdu.load_pct = round((pdu.current_load_kw / pdu.rated_capacity_kw) * 100.0, 1)
@@ -488,18 +516,15 @@ class DataHallTwinEngine:
             ups.loss_kw = round(pdu_sum * (1.0 - ups.efficiency_pct / 100.0), 2)
             ups.current_load_kw = round(pdu_sum + ups.loss_kw, 2)
 
-        # 6. Central Chiller + Cooling Tower Plant & Facility PUE Calculation
+        # 6. Central Chiller + Cooling Tower Plant & First-Law Facility PUE
         total_it_kw = sum(r.power_kw for r in self.racks.values())
         total_liquid_heat_kw = sum(c.thermal_load_kw for c in self.cdus.values())
         total_air_heat_kw = sum(c.thermal_load_kw for c in self.cracs.values())
 
-        # Chiller efficiency (COP) improves with higher supply setpoints and lower outdoor wet-bulb
         avg_crac_sp = float(np.mean([c.supply_air_setpoint_c for c in self.cracs.values() if c.enabled] or [18.0]))
         avg_cdu_sp = float(np.mean([c.supply_temp_setpoint_c for c in self.cdus.values() if c.enabled] or [24.0]))
 
-        # Air loop requires chilled water around 7-12°C -> lower COP (~4.1 at 19.5°C wetbulb)
         chiller_cop_air = max(2.2, 4.4 + 0.14 * (avg_crac_sp - 18.0) - 0.13 * (self.outdoor_wetbulb_c - 18.0))
-        # Direct-to-chip warm water loop (24°C+) uses partial free-cooling / economizer -> higher COP (~7.8)
         chiller_cop_liquid = max(3.5, 8.2 + 0.22 * (avg_cdu_sp - 24.0) - 0.16 * (self.outdoor_wetbulb_c - 18.0))
 
         for c in self.cracs.values():
@@ -512,9 +537,13 @@ class DataHallTwinEngine:
         cooling_tower_aux_kw = 14.5 + 0.65 * max(0.0, self.outdoor_wetbulb_c - 16.0)
 
         total_cooling_kw = chiller_air_kw + chiller_liquid_kw + crac_fan_kw + cdu_pump_kw + cooling_tower_aux_kw
-        total_power_loss_kw = sum(p.loss_kw for p in self.pdus.values()) + sum(u.loss_kw for u in self.ups_units.values()) + 8.5  # lighting/BMS
+        total_power_loss_kw = (
+            sum(p.loss_kw for p in self.pdus.values())
+            + sum(u.loss_kw for u in self.ups_units.values())
+            + 8.5
+        )
         total_facility_kw = total_it_kw + total_cooling_kw + total_power_loss_kw
-        pue = total_facility_kw / max(total_it_kw, 1.0)
+        pue = calc_pue(total_facility_kw, total_it_kw)
 
         inlet_temps = [r.inlet_temp_c for r in self.racks.values()]
         chip_temps = [r.chip_temp_c for r in self.racks.values()]
@@ -525,12 +554,14 @@ class DataHallTwinEngine:
         alarms_count += sum(1 for c in self.cracs.values() if c.status != Severity.NORMAL)
         alarms_count += sum(1 for c in self.cdus.values() if c.status != Severity.NORMAL)
 
-        # Health score deduction from thermal excursions and active alarms
-        thermal_penalty = max(0.0, (max_chip_rack.chip_temp_c - 66.0) * 1.8) + max(0.0, (max_inlet_rack.inlet_temp_c - 24.5) * 3.2)
+        thermal_penalty = (
+            max(0.0, (max_chip_rack.chip_temp_c - 66.0) * 1.8)
+            + max(0.0, (max_inlet_rack.inlet_temp_c - 24.5) * 3.2)
+        )
         health_score = float(np.clip(100.0 - thermal_penalty - alarms_count * 2.5, 18.0, 100.0))
 
         wue = 0.42 + 0.024 * max(0.0, self.outdoor_wetbulb_c - 15.0)
-        carbon_intensity = 310.0 + 25.0 * math.sin(t * 0.01)
+        carbon_intensity = econ.grid_carbon_g_per_kwh_default + 25.0 * math.sin(t * 0.01)
 
         metrics = FacilityMetrics(
             timestamp=time.time(),
@@ -541,11 +572,11 @@ class DataHallTwinEngine:
             total_cooling_power_kw=round(total_cooling_kw, 1),
             total_power_loss_kw=round(total_power_loss_kw, 1),
             total_facility_power_kw=round(total_facility_kw, 1),
-            pue=round(pue, 3),
+            pue=pue,
             wue_l_per_kwh=round(wue, 2),
             carbon_intensity_g_per_kwh=round(carbon_intensity, 1),
             carbon_emissions_kg_per_hr=round((total_facility_kw * carbon_intensity) / 1000.0, 1),
-            energy_cost_usd_per_hr=round(total_facility_kw * 0.115, 2),
+            energy_cost_usd_per_hr=round(total_facility_kw * econ.blended_electricity_usd_per_kwh, 2),
             avg_inlet_temp_c=round(float(np.mean(inlet_temps)), 2),
             max_inlet_temp_c=round(max_inlet_rack.inlet_temp_c, 2),
             max_inlet_rack_id=max_inlet_rack.rack_id,
@@ -564,38 +595,28 @@ class DataHallTwinEngine:
         return metrics
 
     def _apply_autopilot_control(self) -> None:
-        """Closed-loop AI cooling controller that tracks optimal thermal margin while minimizing PUE."""
-        north_racks = [r for r in self.racks.values() if r.row_id in ("ROW-A", "ROW-B")]
-        south_racks = [r for r in self.racks.values() if r.row_id in ("ROW-C", "ROW-D")]
+        """Topology-generic closed-loop cooling controller tracking ASHRAE safety margin at minimal PUE."""
+        for crac in self.cracs.values():
+            if not crac.enabled:
+                continue
+            zone_racks = self.get_racks_for_rows(crac.served_rows)
+            if not zone_racks:
+                continue
+            max_zone_inlet = max(r.inlet_temp_c for r in zone_racks)
+            if max_zone_inlet < 22.9:
+                crac.supply_air_setpoint_c = min(21.5, round(crac.supply_air_setpoint_c + 0.15, 2))
+                crac.fan_speed_pct = max(55.0, round(crac.fan_speed_pct - 1.2, 1))
+            elif max_zone_inlet > 24.3:
+                crac.supply_air_setpoint_c = max(16.5, round(crac.supply_air_setpoint_c - 0.25, 2))
+                crac.fan_speed_pct = min(96.0, round(crac.fan_speed_pct + 2.5, 1))
 
-        max_north_inlet = max(r.inlet_temp_c for r in north_racks)
-        max_south_inlet = max(r.inlet_temp_c for r in south_racks)
-
-        # Target max cold-aisle inlet around 23.2°C (ASHRAE A1 safe & high chiller COP)
-        for cid in ("CRAC-1", "CRAC-2"):
-            crac = self.cracs[cid]
-            if crac.enabled:
-                if max_north_inlet < 22.8:
-                    crac.supply_air_setpoint_c = min(21.0, round(crac.supply_air_setpoint_c + 0.15, 2))
-                    crac.fan_speed_pct = max(56.0, round(crac.fan_speed_pct - 1.2, 1))
-                elif max_north_inlet > 24.2:
-                    crac.supply_air_setpoint_c = max(16.5, round(crac.supply_air_setpoint_c - 0.25, 2))
-                    crac.fan_speed_pct = min(96.0, round(crac.fan_speed_pct + 2.5, 1))
-
-        for cid in ("CRAC-3", "CRAC-4"):
-            crac = self.cracs[cid]
-            if crac.enabled:
-                if max_south_inlet < 23.0:
-                    crac.supply_air_setpoint_c = min(21.5, round(crac.supply_air_setpoint_c + 0.15, 2))
-                    crac.fan_speed_pct = max(55.0, round(crac.fan_speed_pct - 1.2, 1))
-                elif max_south_inlet > 24.5:
-                    crac.supply_air_setpoint_c = max(16.5, round(crac.supply_air_setpoint_c - 0.25, 2))
-                    crac.fan_speed_pct = min(96.0, round(crac.fan_speed_pct + 2.5, 1))
-
-        for cdu_id, row_id in (("CDU-1", "ROW-C"), ("CDU-2", "ROW-D")):
-            cdu = self.cdus[cdu_id]
-            row_racks = [r for r in self.racks.values() if r.row_id == row_id]
-            max_chip = max(r.chip_temp_c for r in row_racks)
+        for cdu in self.cdus.values():
+            if not cdu.enabled:
+                continue
+            zone_racks = self.get_racks_for_rows(cdu.served_rows)
+            if not zone_racks:
+                continue
+            max_chip = max(r.chip_temp_c for r in zone_racks)
             if max_chip < 64.0:
                 cdu.supply_temp_setpoint_c = min(27.5, round(cdu.supply_temp_setpoint_c + 0.15, 2))
                 cdu.pump_speed_pct = max(62.0, round(cdu.pump_speed_pct - 1.0, 1))
@@ -604,12 +625,10 @@ class DataHallTwinEngine:
                 cdu.pump_speed_pct = min(98.0, round(cdu.pump_speed_pct + 3.0, 1))
 
     def clone_for_whatif(self) -> "DataHallTwinEngine":
-        """Create a fast deep-copy sandbox of the current twin state to run what-if simulations without mutating live state."""
-        cloned = copy.deepcopy(self)
-        return cloned
+        """Create a fast deep-copy sandbox of the current twin state without mutating live state."""
+        return copy.deepcopy(self)
 
     def apply_blade_action(self, rack_id: str, node_id: str, action: str) -> RackElevationResponse:
-        """Inject or clear a 42U server-blade level fault or power cap (e.g., Quick-Disconnect valve restriction, workload burst, 80% power cap)."""
         key = f"{rack_id}:{node_id}"
         if action == "clear_fault":
             self.blade_overrides.pop(key, None)
@@ -620,32 +639,17 @@ class DataHallTwinEngine:
         elif action == "cap_power_80":
             self.blade_overrides[key] = {"power_cap_pct": 80.0, "throttled": True}
 
-        # Step physics once so rack rollup reflects blade state
         self.step(dt_sec=1.5)
         return self.get_rack_elevation(rack_id)
 
     def get_rack_elevation(self, rack_id: str) -> RackElevationResponse:
-        """
-        Generate the full 42U server-level chassis layout and real-time node telemetry for any of the 32 racks.
-        - High-Density Hybrid Liquid Racks (ROW-C, ROW-D):
-          U41-U42: Top-of-Rack 400GbE InfiniBand / RoCE Switch (2U)
-          U39-U40: 1U Liquid Cooling Manifold Distribution Header + 1U Rack Busbar Shelf PSU
-          U25-U38: 4x 3U HGX B200 / H100 8-GPU Liquid-Cooled Nodes + 2U NVLink Switch Fabric
-          U19-U24: 3x 2U NVSwitch Interconnect Fabrics
-          U03-U18: 4x 4U HGX 8-GPU Direct-to-Chip Cold-Plate Nodes
-          U01-U02: Bottom 48V Busbar Rectifier Shelf (2U)
-        - Air-Cooled Compute / Storage Racks (ROW-A, ROW-B):
-          U41-U42: Redundant Top-of-Rack Switches (2U)
-          U03-U40: 19x 2U Dual-Socket Compute / NVMe Storage Nodes
-          U01-U02: Rack UPS / PDU Shelf (2U)
-        """
         if rack_id not in self.racks:
-            rack_id = "R-C04"
+            rack_id = next(iter(self.racks.keys()))
         rk = self.racks[rack_id]
         nodes: List[ServerNodeTelemetry] = []
 
         if rk.cooling_type == CoolingType.HYBRID_LIQUID:
-            gpu_model = "NVIDIA HGX B200 (1000W TDP)" if rk.row_id == "ROW-C" else "NVIDIA HGX H200 (700W TDP)"
+            gpu_model = "NVIDIA HGX B200 (1000W TDP)" if rk.max_power_kw >= 80.0 else "NVIDIA HGX H200 (700W TDP)"
             layout = [
                 (41, 2, "ToR Quantum-2 InfiniBand Switch", UChassisType.TOR_SWITCH, "High-Velocity Air", 0, 0.03),
                 (39, 2, "CDU Rack Manifold Header & Quick-Disconnects", UChassisType.LIQUID_MANIFOLD, "Direct-to-Chip Cold Plate", 0, 0.01),
@@ -676,17 +680,21 @@ class DataHallTwinEngine:
                 (1, 4, "Redundant AC/DC Power Supply Shelf", UChassisType.SHELF_PSU, "High-Velocity Air", 0, 0.03),
             ]
 
-        for idx, (u_start, u_height, label, ctype, cmode, gpus, p_weight) in enumerate(layout):
+        for u_start, u_height, label, ctype, cmode, gpus, p_weight in layout:
             node_id = f"{rack_id}-U{u_start:02d}"
             override = self.blade_overrides.get(f"{rack_id}:{node_id}", {})
 
-            # Vertical thermal stratification: top of rack is slightly warmer than bottom
             height_factor = (u_start / 42.0) * 1.4
-            base_util = np.clip(rk.it_utilization_pct + 6.0 * math.sin(u_start * 0.4) + override.get("util_boost", 0.0), 8.0, 99.8)
+            base_util = np.clip(
+                rk.it_utilization_pct + 6.0 * math.sin(u_start * 0.4) + override.get("util_boost", 0.0),
+                8.0,
+                99.8,
+            )
             if "power_cap_pct" in override:
                 base_util = min(base_util, override["power_cap_pct"] * 0.82)
 
-            node_power = round(rk.power_kw * p_weight * (1.28 if override.get("util_boost") else (0.78 if override.get("power_cap_pct") else 1.0)), 2)
+            mult = 1.28 if override.get("util_boost") else (0.78 if override.get("power_cap_pct") else 1.0)
+            node_power = round(rk.power_kw * p_weight * mult, 2)
             node_inlet = round(rk.inlet_temp_c + height_factor * 0.65 - 0.4, 1)
 
             qd_restricted = bool(override.get("qd_restricted", False))
@@ -695,10 +703,21 @@ class DataHallTwinEngine:
             if rk.cooling_type == CoolingType.HYBRID_LIQUID and cmode == "Direct-to-Chip Cold Plate":
                 base_flow = (rk.coolant_flow_lpm or 40.0) * p_weight * (0.42 if qd_restricted else 1.0)
                 flow_lpm = round(max(0.8, base_flow), 1)
-                chip_base = rk.chip_temp_c + height_factor * 0.8 + (13.5 if qd_restricted else 0.0) + (5.5 if override.get("util_boost") else 0.0) - (4.5 if override.get("power_cap_pct") else 0.0)
+                chip_base = (
+                    rk.chip_temp_c
+                    + height_factor * 0.8
+                    + (13.5 if qd_restricted else 0.0)
+                    + (5.5 if override.get("util_boost") else 0.0)
+                    - (4.5 if override.get("power_cap_pct") else 0.0)
+                )
             else:
                 flow_lpm = None
-                chip_base = rk.chip_temp_c + height_factor * 0.9 + (6.5 if override.get("util_boost") else 0.0) - (4.0 if override.get("power_cap_pct") else 0.0)
+                chip_base = (
+                    rk.chip_temp_c
+                    + height_factor * 0.9
+                    + (6.5 if override.get("util_boost") else 0.0)
+                    - (4.0 if override.get("power_cap_pct") else 0.0)
+                )
 
             cpu_temp = round(chip_base - 4.2, 1)
             gpu_temps = [round(chip_base + 1.2 * math.sin(g + u_start), 1) for g in range(gpus)] if gpus > 0 else []
@@ -751,8 +770,7 @@ class DataHallTwinEngine:
             total_blade_power_kw=total_blade_kw,
             max_blade_temp_c=round(max_blade_t, 1),
             manifold_supply_c=rk.coolant_supply_temp_c,
-            manifold_return_c=rk.coolant_return_temp_c,
+            manifold_return_c=rk.coolant_return_c if hasattr(rk, "coolant_return_c") else rk.coolant_return_temp_c,
             manifold_pressure_kpa=182.0 if rk.cooling_type == CoolingType.HYBRID_LIQUID else None,
             nodes=nodes,
         )
-

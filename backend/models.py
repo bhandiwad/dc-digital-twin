@@ -459,8 +459,8 @@ class ExecutiveROIReport(BaseModel):
 
 class ConnectorProtocol(str, Enum):
     BACNET_MODBUS = "bacnet_modbus"
-    REDFISH_OBMC = "redfish_openbmc"
-    NVIDIA_DCGM = "nvidia_dcgm_prometheus"
+    SNMP_MODBUS_EPMS = "snmp_modbus_epms"
+    COOLIT_CDU_MODBUS = "coolit_cdu_modbus"
     MQTT_SPARKPLUG = "mqtt_sparkplug_b"
     SNOWFLAKE_HISTORIAN = "osi_pi_historian"
 
@@ -506,7 +506,7 @@ class BYODColumnMapping(BaseModel):
 
 class BYODIngestRequest(BaseModel):
     dataset_name: str = "Customer Facility Telemetry"
-    vendor_profile: str = "auto"  # "auto" | "schneider_bms" | "nvidia_dcgm" | "sunbird_dcim"
+    vendor_profile: str = "auto"  # "auto" | "schneider_bms" | "coolit_epms" | "sunbird_dcim"
     csv_content: str
     apply_immediately: bool = True
 
