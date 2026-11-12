@@ -94,3 +94,61 @@ def test_dynamic_feature_plugin_loader(tmp_path):
         res = c.get("/api/features/sample-ping")
         assert res.status_code == 200
         assert res.json() == {"feature": "mounted"}
+
+
+def test_autopilot_toggle_and_bacnet_relinquishment(api_client):
+    # Ensure starting from Manual BMS (Auto-Pilot OFF)
+    r_off_init = api_client.post("/api/controls", json={"auto_optimize": False})
+    assert r_off_init.status_code == 200
+    snap_manual = r_off_init.json()
+    assert snap_manual["optimization"]["auto_pilot_active"] is False
+    manual_pue = snap_manual["facility"]["pue"]
+
+    # Enable Closed-Loop Auto-Pilot (BACnet Priority 8) -> PUE drops measurably
+    r_on = api_client.post("/api/controls", json={"auto_optimize": True})
+    assert r_on.status_code == 200
+    snap_auto = r_on.json()
+    assert snap_auto["optimization"]["auto_pilot_active"] is True
+    assert snap_auto["facility"]["pue"] < manual_pue - 0.03
+    assert len(snap_auto["optimization"]["actions"]) >= 1
+
+    # Turn Auto-Pilot OFF -> Relinquishes Priority 8 back to Manual BMS Priority 16
+    r_off_again = api_client.post("/api/controls", json={"auto_optimize": False})
+    assert r_off_again.status_code == 200
+    snap_reverted = r_off_again.json()
+    assert snap_reverted["optimization"]["auto_pilot_active"] is False
+    assert snap_reverted["facility"]["pue"] > snap_auto["facility"]["pue"] + 0.02
+
+
+def test_10k_gpu_cluster_scale_out_planner(api_client):
+    # 1. 10,000 GB200 NVL72 GPUs with Warm-Water Direct Liquid Cooling
+    res = api_client.post(
+        "/api/plan/cluster-scale",
+        json={
+            "gpu_count": 10000,
+            "gpu_arch": "gb200_nvl72",
+            "cooling_strategy": "warm_water_dlc",
+        },
+    )
+    assert res.status_code == 200
+    plan = res.json()
+    assert plan["feasible"] is True
+    assert plan["compute_racks"] == 139
+    assert plan["data_halls_required"] >= 4
+    # First-Law energy balance: liquid + residual air == total IT MW
+    assert abs((plan["liquid_heat_mw"] + plan["air_residual_mw"]) - plan["cluster_it_mw"]) < 0.05
+    assert plan["total_coolant_flow_lpm"] > 15000
+    assert plan["synchronous_step_swing_mw"] > 8.0
+
+    # 2. Air-Only cooling on 126 kW/rack GB200 NVL72 is flagged physically infeasible
+    res_air = api_client.post(
+        "/api/plan/cluster-scale",
+        json={
+            "gpu_count": 10000,
+            "gpu_arch": "gb200_nvl72",
+            "cooling_strategy": "legacy_air",
+        },
+    )
+    assert res_air.status_code == 200
+    assert res_air.json()["feasible"] is False
+

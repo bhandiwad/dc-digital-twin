@@ -18,6 +18,8 @@ from typing import Any, List, Tuple
 from models import (
     AgentCopilotResponse,
     AnomalyEvent,
+    ClusterScaleRequest,
+    ClusterScaleResponse,
     EnergyDispatchRequest,
     EnergyGridManagementState,
     ExecutiveROIReport,
@@ -31,6 +33,7 @@ from models import (
     WhatIfResponse,
 )
 from services import (
+    ClusterScalePlannerService,
     ConstrainedMPCService,
     CopilotAgentService,
     EnergyROIService,
@@ -46,12 +49,18 @@ class DataCenterAIService:
     def __init__(self) -> None:
         self.forecaster = ForecasterAnomalyService()
         self.optimizer = OptimizerWhatIfService()
+        self.cluster_planner = ClusterScalePlannerService()
         self.calibrator = OpenDTCalibrationService()
         self.mpc = ConstrainedMPCService()
         self.mop = GraphRAGMOPService()
         self.energy = EnergyROIService()
         self.copilot = CopilotAgentService()
         self.llm_config = self.copilot.llm_config
+
+    def evaluate_cluster_scale(
+        self, engine: DataHallTwinEngine, req: ClusterScaleRequest
+    ) -> ClusterScaleResponse:
+        return self.cluster_planner.evaluate_cluster_scale(engine, req)
 
     def update_forecasts_and_anomalies(
         self, engine: DataHallTwinEngine

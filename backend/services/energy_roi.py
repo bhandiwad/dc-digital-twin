@@ -38,9 +38,6 @@ class EnergyROIService:
         self.simulate_grid_dr_event = req.simulate_grid_dr_event
         self.target_grid_cap_kw = req.target_grid_cap_kw
 
-        if req.thermal_precool_enabled:
-            engine.auto_optimize = True
-
         ups_list = list(engine.ups_units.values())
         for idx, ups in enumerate(ups_list):
             ups.battery_soc_pct = (86.4 + 1.8 * idx) if req.bess_peak_shaving_enabled else 100.0

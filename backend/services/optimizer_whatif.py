@@ -123,8 +123,42 @@ class OptimizerWhatIfService:
                 )
 
         if engine.auto_optimize:
-            power_saved_kw = round(latest.total_it_power_kw * 0.042, 1)
-            projected_pue = round(max(1.105, latest.pue - 0.008), 3)
+            if not actions:
+                for c_cfg in engine.site_config.crac_units:
+                    crac = engine.cracs.get(c_cfg.crac_id)
+                    if crac and crac.enabled and abs(crac.supply_air_setpoint_c - c_cfg.supply_air_setpoint_c) >= 0.4:
+                        actions.append(
+                            OptimizationAction(
+                                target_id=c_cfg.crac_id,
+                                parameter="BACnet Priority 8 Active (Air + VFD)",
+                                current_value=c_cfg.supply_air_setpoint_c,
+                                recommended_value=round(crac.supply_air_setpoint_c, 1),
+                                unit="°C",
+                                rationale=(
+                                    f"Holding {crac.supply_air_setpoint_c:.1f}°C @ {crac.fan_speed_pct:.0f}% fan "
+                                    f"(vs Manual Priority 16: {c_cfg.supply_air_setpoint_c:.1f}°C @ {c_cfg.initial_fan_speed_pct:.0f}%)."
+                                ),
+                            )
+                        )
+                for cdu_cfg in engine.site_config.cdu_units:
+                    cdu = engine.cdus.get(cdu_cfg.cdu_id)
+                    if cdu and cdu.enabled and abs(cdu.supply_temp_setpoint_c - cdu_cfg.supply_temp_setpoint_c) >= 0.4:
+                        actions.append(
+                            OptimizationAction(
+                                target_id=cdu_cfg.cdu_id,
+                                parameter="BACnet Priority 8 Active (Warm Liquid)",
+                                current_value=cdu_cfg.supply_temp_setpoint_c,
+                                recommended_value=round(cdu.supply_temp_setpoint_c, 1),
+                                unit="°C",
+                                rationale=(
+                                    f"Holding {cdu.supply_temp_setpoint_c:.1f}°C @ {cdu.pump_speed_pct:.0f}% pump "
+                                    f"(vs Manual Priority 16: {cdu_cfg.supply_temp_setpoint_c:.1f}°C @ {cdu_cfg.initial_pump_speed_pct:.0f}%)."
+                                ),
+                            )
+                        )
+            manual_baseline_pue = max(latest.pue + 0.04, econ.legacy_baseline_pue - 0.025)
+            power_saved_kw = round(latest.total_it_power_kw * (manual_baseline_pue - latest.pue), 1)
+            projected_pue = latest.pue
         else:
             potential_pue_drop = min(0.065, 0.014 * len(actions) + max(0.0, latest.pue - 1.16) * 0.45)
             projected_pue = round(max(1.11, latest.pue - potential_pue_drop), 3)

@@ -9,6 +9,8 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from api.deps import runtime
 from models import (
     BladeActionRequest,
+    ClusterScaleRequest,
+    ClusterScaleResponse,
     ControlSetpointRequest,
     RackElevationResponse,
     ScenarioTriggerRequest,
@@ -58,6 +60,27 @@ def update_controls(req: ControlSetpointRequest) -> TwinStateSnapshot:
     eng = runtime.twin_engine
     if req.auto_optimize is not None:
         eng.auto_optimize = req.auto_optimize
+        if req.auto_optimize:
+            # Closed-loop BACnet Priority 8 active: converge supervisory setpoints immediately
+            for _ in range(7):
+                eng.step(dt_sec=2.5)
+            for cid, crac in eng.cracs.items():
+                runtime.telemetry_adapter.write_setpoint(
+                    cid, "supply_air_setpoint_c", crac.supply_air_setpoint_c
+                )
+            for cdu_id, cdu in eng.cdus.items():
+                runtime.telemetry_adapter.write_setpoint(
+                    cdu_id, "supply_temp_setpoint_c", cdu.supply_temp_setpoint_c
+                )
+        else:
+            # Relinquish BACnet Priority 8 -> NULL so local Priority 16 conservative BMS setpoints resume
+            for cid in eng.cracs:
+                runtime.telemetry_adapter.relinquish_setpoint(cid, "supply_air_setpoint_c")
+            for cdu_id in eng.cdus:
+                runtime.telemetry_adapter.relinquish_setpoint(cdu_id, "supply_temp_setpoint_c")
+            eng.restore_manual_bms_defaults()
+            for _ in range(7):
+                eng.step(dt_sec=2.5)
 
     if req.outdoor_wetbulb_c is not None:
         eng.outdoor_wetbulb_c = req.outdoor_wetbulb_c
@@ -115,6 +138,11 @@ def apply_ai_optimization() -> TwinStateSnapshot:
 @router.post("/api/what-if", response_model=WhatIfResponse)
 def evaluate_what_if(req: WhatIfRequest) -> WhatIfResponse:
     return runtime.ai_service.run_whatif_simulation(runtime.twin_engine, req)
+
+
+@router.post("/api/plan/cluster-scale", response_model=ClusterScaleResponse)
+def evaluate_cluster_scale_plan(req: ClusterScaleRequest) -> ClusterScaleResponse:
+    return runtime.ai_service.evaluate_cluster_scale(runtime.twin_engine, req)
 
 
 @router.get("/api/rack/{rack_id}/elevation", response_model=RackElevationResponse)

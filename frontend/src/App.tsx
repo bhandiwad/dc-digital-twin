@@ -7,7 +7,6 @@ import {
   ChevronDown,
   Clock,
   Cpu,
-  FileText,
   FlaskConical,
   LayoutDashboard,
   Moon,
@@ -17,6 +16,7 @@ import {
   Sliders,
   Sparkles,
   Sun,
+  TrendingUp,
 } from 'lucide-react';
 import {
   TwinStateSnapshot,
@@ -37,12 +37,12 @@ import {
 import { DataHall3D } from './components/DataHall3D';
 import { TelemetryCharts } from './components/TelemetryCharts';
 import { TimeSeriesReplayBar } from './components/TimeSeriesReplayBar';
-import { ExecutiveROIModal } from './components/ExecutiveROIModal';
 import { DataConnectorsModal } from './components/DataConnectorsModal';
 import { OverviewOptimizePanel } from './components/workbench/OverviewOptimizePanel';
 import { ControlsInspectorPanel } from './components/workbench/ControlsInspectorPanel';
 import { PlanSandboxPanel } from './components/workbench/PlanSandboxPanel';
 import { SystemHealthPanel } from './components/workbench/SystemHealthPanel';
+import { ROIBusinessCasePanel } from './components/workbench/ROIBusinessCasePanel';
 import {
   AgentCopilotPanel,
   CopilotMessageItem,
@@ -69,7 +69,6 @@ export const App: React.FC = () => {
   const [bottomDock, setBottomDock] = useState<'none' | 'trends' | 'replay'>('none');
   const [scenarioMenuOpen, setScenarioMenuOpen] = useState<boolean>(false);
   const [wsConnected, setWsConnected] = useState<boolean>(false);
-  const [roiModalOpen, setRoiModalOpen] = useState<boolean>(false);
   const [connectorsModalOpen, setConnectorsModalOpen] = useState<boolean>(false);
   const [ingestedDatasetId, setIngestedDatasetId] = useState<string | null>(null);
   const [lightMode, setLightMode] = useState<boolean>(false);
@@ -290,6 +289,7 @@ export const App: React.FC = () => {
     { id: 'inspect', label: 'Inspect', icon: Sliders },
     { id: 'plan', label: 'Plan', icon: FlaskConical },
     { id: 'health', label: 'Health', icon: Activity },
+    { id: 'roi', label: 'ROI', icon: TrendingUp },
     { id: 'copilot', label: 'Copilot', icon: Bot },
     ...DISCOVERED_FEATURE_PLUGINS.map((p) => ({ id: p.id, label: p.label, icon: Puzzle })),
   ];
@@ -297,8 +297,6 @@ export const App: React.FC = () => {
 
   return (
     <div className="h-screen w-screen flex flex-col bg-[#090d16] text-slate-100 select-none overflow-hidden">
-      <ExecutiveROIModal isOpen={roiModalOpen} onClose={() => setRoiModalOpen(false)} />
-
       <DataConnectorsModal
         isOpen={connectorsModalOpen}
         onClose={() => setConnectorsModalOpen(false)}
@@ -350,9 +348,11 @@ export const App: React.FC = () => {
           <div>
             <span className="text-slate-400 mr-2">PUE</span>
             <span className="font-semibold text-white">{facility.pue.toFixed(2)}</span>
-            <span className="text-emerald-400 font-medium ml-1.5">
-              → {optimization.projected_pue.toFixed(2)}
-            </span>
+            {!optimization.auto_pilot_active && (
+              <span className="text-emerald-400 font-medium ml-1.5">
+                → {optimization.projected_pue.toFixed(2)}
+              </span>
+            )}
           </div>
 
           <div className="h-4 w-px bg-slate-800" />
@@ -391,14 +391,27 @@ export const App: React.FC = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={() => handleUpdateControl({ auto_optimize: !optimization.auto_pilot_active })}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 border transition-colors ${
+            title={
+              optimization.auto_pilot_active
+                ? 'Closed-loop BACnet Priority 8 active — click to relinquish back to Manual BMS (Priority 16)'
+                : 'Manual BMS Mode (Priority 16) — click to enable closed-loop Auto-Pilot optimization'
+            }
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 border transition-colors tabular-nums ${
               optimization.auto_pilot_active
                 ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
                 : 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-slate-300'
             }`}
           >
-            <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Auto-Pilot {optimization.auto_pilot_active ? 'On' : 'Off'}</span>
+            <Sparkles
+              className={`w-3.5 h-3.5 ${
+                optimization.auto_pilot_active ? 'text-emerald-400' : 'text-slate-400'
+              }`}
+            />
+            <span>
+              {optimization.auto_pilot_active
+                ? `Auto-Pilot On (-${optimization.power_saved_kw.toFixed(0)} kW)`
+                : 'Auto-Pilot Off'}
+            </span>
           </button>
 
           <button
@@ -407,14 +420,6 @@ export const App: React.FC = () => {
           >
             <Cable className="w-3.5 h-3.5 text-slate-400" />
             <span>Data</span>
-          </button>
-
-          <button
-            onClick={() => setRoiModalOpen(true)}
-            className="px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-200 transition-colors"
-          >
-            <FileText className="w-3.5 h-3.5 text-sky-400" />
-            <span>ROI Summary</span>
           </button>
 
           <button
@@ -556,7 +561,9 @@ export const App: React.FC = () => {
             <div className="h-10 px-4 flex items-center justify-between text-xs">
               <div className="text-slate-400 tabular-nums">
                 {snapshot.racks.length} Racks ({airRackCount} Air · {liquidRackCount} Liquid) ·{' '}
-                <span className="text-slate-500">Click any rack or cooling unit on the floor to inspect</span>
+                <span className="text-slate-500">
+                  Click any rack or cooling unit on the floor to inspect
+                </span>
               </div>
 
               <div className="flex items-center gap-1.5">
@@ -604,7 +611,7 @@ export const App: React.FC = () => {
         </div>
 
         {/* Right Clean Workbench Panel */}
-        <aside className="w-[430px] border-l border-slate-800/80 bg-slate-950 flex flex-col shrink-0 z-20">
+        <aside className="w-[450px] border-l border-slate-800/80 bg-slate-950 flex flex-col shrink-0 z-20">
           {/* Clean Navigation Tabs */}
           <div className="flex items-center border-b border-slate-800/80 px-2 pt-1.5 gap-0.5 overflow-x-auto">
             {coreTabs.map((t) => {
@@ -619,7 +626,7 @@ export const App: React.FC = () => {
                       handleRunWhatIf();
                     }
                   }}
-                  className={`flex-1 py-2.5 px-2 text-xs font-medium flex items-center justify-center gap-1.5 border-b-2 transition-colors whitespace-nowrap ${
+                  className={`flex-1 py-2.5 px-1.5 text-xs font-medium flex items-center justify-center gap-1 border-b-2 transition-colors whitespace-nowrap ${
                     isSelected
                       ? 'border-sky-400 text-white'
                       : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -644,6 +651,7 @@ export const App: React.FC = () => {
                 optimization={optimization}
                 anomalies={anomalies}
                 onApplyOptimization={handleApplyOptimization}
+                onToggleAutoPilot={(enable) => handleUpdateControl({ auto_optimize: enable })}
                 onSelectRackAnomaly={(rackId) => {
                   setSelectedId(rackId);
                   setSelectedType('rack');
@@ -674,6 +682,8 @@ export const App: React.FC = () => {
             )}
 
             {activeTab === 'health' && <SystemHealthPanel />}
+
+            {activeTab === 'roi' && <ROIBusinessCasePanel livePue={facility.pue} />}
 
             {activeTab === 'copilot' && (
               <AgentCopilotPanel

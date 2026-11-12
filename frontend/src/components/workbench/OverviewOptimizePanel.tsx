@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  RotateCcw,
   Sparkles,
 } from 'lucide-react';
 import {
@@ -17,6 +18,7 @@ export interface OverviewOptimizePanelProps {
   optimization: OptimizationRecommendation;
   anomalies: AnomalyEvent[];
   onApplyOptimization: () => void;
+  onToggleAutoPilot: (enable: boolean) => void;
   onSelectRackAnomaly: (rackId: string) => void;
 }
 
@@ -24,6 +26,7 @@ export const OverviewOptimizePanel: React.FC<OverviewOptimizePanelProps> = ({
   optimization,
   anomalies,
   onApplyOptimization,
+  onToggleAutoPilot,
   onSelectRackAnomaly,
 }) => {
   const [energyState, setEnergyState] = useState<EnergyGridManagementState | null>(null);
@@ -68,6 +71,8 @@ export const OverviewOptimizePanel: React.FC<OverviewOptimizePanelProps> = ({
     }
   };
 
+  const isAutoPilot = optimization.auto_pilot_active;
+
   return (
     <div className="space-y-4">
       {/* 1. Active Alerts (Calm when clear, prominent when active) */}
@@ -111,46 +116,93 @@ export const OverviewOptimizePanel: React.FC<OverviewOptimizePanelProps> = ({
         </div>
       )}
 
-      {/* 2. Cooling Savings & One-Click Setpoint Optimization */}
-      <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 space-y-3.5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-sky-400" />
-            <h3 className="text-sm font-semibold text-white">Cooling Optimization</h3>
+      {/* 2. Cooling Optimization & Closed-Loop Auto-Pilot Status */}
+      <div
+        className={`rounded-xl p-4 space-y-3.5 border transition-colors ${
+          isAutoPilot
+            ? 'bg-emerald-950/20 border-emerald-500/35'
+            : 'bg-slate-900/60 border-slate-800'
+        }`}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-start gap-2">
+            <Sparkles
+              className={`w-4 h-4 mt-0.5 shrink-0 ${
+                isAutoPilot ? 'text-emerald-400' : 'text-sky-400'
+              }`}
+            />
+            <div>
+              <h3 className="text-sm font-semibold text-white">
+                {isAutoPilot ? 'Auto-Pilot Active (Closed-Loop)' : 'Cooling Optimization'}
+              </h3>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                {isAutoPilot
+                  ? 'BACnet Priority 8 supervisory control is actively trimming fans, pumps & supply temps.'
+                  : 'Manual BMS Mode (Priority 16) — cooling units are running fixed conservative setpoints.'}
+              </p>
+            </div>
           </div>
-          <span className="text-xs font-semibold tabular-nums px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300">
-            Save {optimization.power_saved_kw.toFixed(1)} kW
+          <span
+            className={`text-xs font-semibold tabular-nums px-2.5 py-0.5 rounded-full shrink-0 ${
+              isAutoPilot
+                ? 'bg-emerald-500/20 text-emerald-300'
+                : 'bg-sky-500/15 text-sky-300'
+            }`}
+          >
+            {isAutoPilot
+              ? `Saving ${optimization.power_saved_kw.toFixed(0)} kW`
+              : `Save ${optimization.power_saved_kw.toFixed(0)} kW`}
           </span>
         </div>
 
         <div className="grid grid-cols-3 gap-2.5 tabular-nums">
           <div className="bg-slate-950/70 border border-slate-800/80 rounded-lg p-2.5">
-            <div className="text-[11px] text-slate-400">PUE</div>
+            <div className="text-[11px] text-slate-400">{isAutoPilot ? 'Active PUE' : 'PUE'}</div>
             <div className="text-sm font-semibold text-white mt-0.5">
-              {optimization.current_pue.toFixed(2)}{' '}
-              <span className="text-emerald-400">→ {optimization.projected_pue.toFixed(2)}</span>
+              {isAutoPilot ? (
+                <span className="text-emerald-400">{optimization.current_pue.toFixed(2)}</span>
+              ) : (
+                <>
+                  {optimization.current_pue.toFixed(2)}{' '}
+                  <span className="text-emerald-400">
+                    → {optimization.projected_pue.toFixed(2)}
+                  </span>
+                </>
+              )}
             </div>
           </div>
           <div className="bg-slate-950/70 border border-slate-800/80 rounded-lg p-2.5">
-            <div className="text-[11px] text-slate-400">Est. Savings</div>
+            <div className="text-[11px] text-slate-400">
+              {isAutoPilot ? 'Run-Rate Saved' : 'Est. Savings'}
+            </div>
             <div className="text-sm font-semibold text-sky-400 mt-0.5">
               ${optimization.annual_cost_savings_usd.toLocaleString()}/yr
             </div>
           </div>
           <div className="bg-slate-950/70 border border-slate-800/80 rounded-lg p-2.5">
-            <div className="text-[11px] text-slate-400">CO₂ Avoided</div>
+            <div className="text-[11px] text-slate-400">Safety Margin</div>
             <div className="text-sm font-semibold text-emerald-400 mt-0.5">
-              {optimization.annual_carbon_saved_tons.toFixed(0)} t/yr
+              +{optimization.thermal_safety_margin_c.toFixed(1)}°C
             </div>
           </div>
         </div>
 
-        <button
-          onClick={onApplyOptimization}
-          className="w-full py-2.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 font-semibold text-xs transition-colors"
-        >
-          Apply Recommended Setpoints ({optimization.actions.length})
-        </button>
+        {isAutoPilot ? (
+          <button
+            onClick={() => onToggleAutoPilot(false)}
+            className="w-full py-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 font-medium text-xs flex items-center justify-center gap-1.5 transition-colors"
+          >
+            <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
+            <span>Pause Auto-Pilot (Revert to Manual BMS)</span>
+          </button>
+        ) : (
+          <button
+            onClick={onApplyOptimization}
+            className="w-full py-2.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 font-semibold text-xs transition-colors"
+          >
+            Enable Auto-Pilot & Apply Setpoints ({optimization.actions.length})
+          </button>
+        )}
 
         {optimization.actions.length > 0 && (
           <div>
@@ -158,7 +210,11 @@ export const OverviewOptimizePanel: React.FC<OverviewOptimizePanelProps> = ({
               onClick={() => setShowActionsDetail(!showActionsDetail)}
               className="w-full flex items-center justify-between text-xs text-slate-400 hover:text-slate-200 pt-0.5"
             >
-              <span>View {optimization.actions.length} proposed setpoint adjustments</span>
+              <span>
+                {isAutoPilot
+                  ? `View ${optimization.actions.length} active BACnet Priority 8 overrides`
+                  : `View ${optimization.actions.length} proposed setpoint adjustments`}
+              </span>
               {showActionsDetail ? (
                 <ChevronUp className="w-3.5 h-3.5" />
               ) : (
@@ -219,7 +275,8 @@ export const OverviewOptimizePanel: React.FC<OverviewOptimizePanelProps> = ({
               <div>
                 <div className="font-medium text-slate-200">UPS Battery Peak Shaving</div>
                 <div className="text-[11px] text-slate-400 tabular-nums">
-                  Discharging {energyState.bess_dispatch_kw.toFixed(0)} kW · Battery {energyState.ups_a_soc_pct}%
+                  Discharging {energyState.bess_dispatch_kw.toFixed(0)} kW · Battery{' '}
+                  {energyState.ups_a_soc_pct}%
                 </div>
               </div>
               <input
@@ -234,7 +291,8 @@ export const OverviewOptimizePanel: React.FC<OverviewOptimizePanelProps> = ({
               <div>
                 <div className="font-medium text-slate-200">Chilled-Water Pre-Cooling</div>
                 <div className="text-[11px] text-slate-400 tabular-nums">
-                  Pre-cools hall ahead of peak utility hours (Buffer {energyState.chilled_water_buffer_soc_pct}%)
+                  Pre-cools hall ahead of peak utility hours (Buffer{' '}
+                  {energyState.chilled_water_buffer_soc_pct}%)
                 </div>
               </div>
               <input
@@ -248,7 +306,9 @@ export const OverviewOptimizePanel: React.FC<OverviewOptimizePanelProps> = ({
             <label className="flex items-center justify-between bg-slate-950/60 border border-slate-800/80 rounded-lg px-3 py-2 cursor-pointer">
               <div>
                 <div className="font-medium text-slate-200">Simulate Utility Peak Event</div>
-                <div className="text-[11px] text-slate-400">Test critical-peak $0.285/kWh grid pricing</div>
+                <div className="text-[11px] text-slate-400">
+                  Test critical-peak $0.285/kWh grid pricing
+                </div>
               </div>
               <input
                 type="checkbox"
@@ -264,14 +324,21 @@ export const OverviewOptimizePanel: React.FC<OverviewOptimizePanelProps> = ({
             className="w-full flex items-center justify-between text-xs text-slate-400 hover:text-slate-200"
           >
             <span>Power breakdown & 24h tariff schedule</span>
-            {showSchedule ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            {showSchedule ? (
+              <ChevronUp className="w-3.5 h-3.5" />
+            ) : (
+              <ChevronDown className="w-3.5 h-3.5" />
+            )}
           </button>
 
           {showSchedule && (
             <div className="space-y-3 pt-1">
               <div className="space-y-1.5">
                 {Object.entries(energyState.power_breakdown_kw).map(([label, kw]) => {
-                  const pct = Math.min(100, (kw / Math.max(energyState.current_grid_import_kw, 1)) * 100);
+                  const pct = Math.min(
+                    100,
+                    (kw / Math.max(energyState.current_grid_import_kw, 1)) * 100
+                  );
                   return (
                     <div key={label} className="space-y-1 text-xs tabular-nums">
                       <div className="flex justify-between text-slate-300">
@@ -295,7 +362,8 @@ export const OverviewOptimizePanel: React.FC<OverviewOptimizePanelProps> = ({
                     <span className="font-medium text-slate-200">{slot.hour_label}</span>
                     <span className="text-slate-400">${slot.price_usd_per_kwh.toFixed(3)}/kWh</span>
                     <span className="text-sky-400 font-medium">
-                      {slot.baseline_grid_draw_kw.toFixed(0)} → {slot.optimized_grid_draw_kw.toFixed(0)} kW
+                      {slot.baseline_grid_draw_kw.toFixed(0)} →{' '}
+                      {slot.optimized_grid_draw_kw.toFixed(0)} kW
                     </span>
                   </div>
                 ))}

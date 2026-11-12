@@ -1,5 +1,7 @@
 import {
   AgentCopilotResponse,
+  ClusterScaleRequest,
+  ClusterScaleResponse,
   TwinStateSnapshot,
   WhatIfRequest,
   WhatIfResponse,
@@ -50,6 +52,18 @@ export async function runCounterfactualWhatIf(payload: WhatIfRequest): Promise<W
     body: JSON.stringify(payload),
   });
   if (!res.ok) throw new Error(`Failed to run what-if simulation: ${res.status}`);
+  return res.json();
+}
+
+export async function postClusterScalePlan(
+  payload: ClusterScaleRequest
+): Promise<ClusterScaleResponse> {
+  const res = await fetch('/api/plan/cluster-scale', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(`Failed to evaluate cluster scale plan: ${res.status}`);
   return res.json();
 }
 

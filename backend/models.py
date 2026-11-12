@@ -656,5 +656,64 @@ class EnergyDispatchRequest(BaseModel):
     target_grid_cap_kw: float = 1250.0
 
 
+# --- Multi-MW / 10k-GPU AI Training Cluster Scale-Out Planner ---
+
+class ClusterInfrastructureDelta(BaseModel):
+    category: str
+    current_site_value: str
+    required_cluster_value: str
+    upgrade_delta: str
+    bottleneck_severity: str  # "info" | "warning" | "critical"
+    engineering_note: str
+
+
+class ClusterScaleRequest(BaseModel):
+    gpu_count: int = Field(default=10000, ge=256, le=100000)
+    gpu_arch: str = "gb200_nvl72"  # "gb200_nvl72" | "h200_hgx" | "nextgen_ultra"
+    cooling_strategy: str = "warm_water_dlc"  # "warm_water_dlc" | "chilled_water_dlc" | "legacy_air"
+
+
+class ClusterScaleResponse(BaseModel):
+    gpu_count: int
+    gpu_arch_label: str
+    cooling_strategy_label: str
+    feasible: bool
+    infeasibility_reason: Optional[str] = None
+    # Footprint & Halls
+    gpus_per_compute_rack: int
+    kw_per_compute_rack: float
+    compute_racks: int
+    network_storage_racks: int
+    total_cluster_racks: int
+    existing_hall_racks: int
+    data_halls_required: int
+    rack_weight_kg: int
+    slab_upgrade_required: bool
+    # Power & Cooling First-Law Split
+    current_hall_it_mw: float
+    cluster_it_mw: float
+    projected_pue: float
+    total_utility_mw: float
+    liquid_heat_mw: float
+    air_residual_mw: float
+    total_coolant_flow_lpm: int
+    modular_cdus_n1: int
+    mv_transformers_n1: int
+    # AI Training Synchronous Step-Load Transient
+    synchronous_step_swing_mw: float
+    bess_transient_buffer_mw: float
+    bess_transient_buffer_mwh: float
+    thermal_buffer_tank_liters: int
+    # Financial / Efficiency Comparison vs Air/Chilled Baseline
+    annual_cooling_savings_usd: float
+    cooling_power_saved_mw: float
+    # Phase-1 Current Hall Pilot Fit
+    phase1_max_gpus_in_current_hall: int
+    phase1_summary: str
+    infrastructure_deltas: List[ClusterInfrastructureDelta]
+    architectural_changes: List[str]
+
+
+
 
 

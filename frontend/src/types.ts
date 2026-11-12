@@ -544,6 +544,57 @@ export interface EnergyGridManagementState {
   schedule_24h: TariffPeriodWindow[];
 }
 
+export interface ClusterInfrastructureDelta {
+  category: string;
+  current_site_value: string;
+  required_cluster_value: string;
+  upgrade_delta: string;
+  bottleneck_severity: 'info' | 'warning' | 'critical';
+  engineering_note: string;
+}
+
+export interface ClusterScaleRequest {
+  gpu_count: number;
+  gpu_arch: 'gb200_nvl72' | 'h200_hgx' | 'nextgen_ultra';
+  cooling_strategy: 'warm_water_dlc' | 'chilled_water_dlc' | 'legacy_air';
+}
+
+export interface ClusterScaleResponse {
+  gpu_count: number;
+  gpu_arch_label: string;
+  cooling_strategy_label: string;
+  feasible: boolean;
+  infeasibility_reason?: string | null;
+  gpus_per_compute_rack: number;
+  kw_per_compute_rack: number;
+  compute_racks: number;
+  network_storage_racks: number;
+  total_cluster_racks: number;
+  existing_hall_racks: number;
+  data_halls_required: number;
+  rack_weight_kg: number;
+  slab_upgrade_required: boolean;
+  current_hall_it_mw: number;
+  cluster_it_mw: number;
+  projected_pue: number;
+  total_utility_mw: number;
+  liquid_heat_mw: number;
+  air_residual_mw: number;
+  total_coolant_flow_lpm: number;
+  modular_cdus_n1: number;
+  mv_transformers_n1: number;
+  synchronous_step_swing_mw: number;
+  bess_transient_buffer_mw: number;
+  bess_transient_buffer_mwh: number;
+  thermal_buffer_tank_liters: number;
+  annual_cooling_savings_usd: number;
+  cooling_power_saved_mw: number;
+  phase1_max_gpus_in_current_hall: number;
+  phase1_summary: string;
+  infrastructure_deltas: ClusterInfrastructureDelta[];
+  architectural_changes: string[];
+}
+
 
 
 

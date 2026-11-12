@@ -595,7 +595,7 @@ class DataHallTwinEngine:
         return metrics
 
     def _apply_autopilot_control(self) -> None:
-        """Topology-generic closed-loop cooling controller tracking ASHRAE safety margin at minimal PUE."""
+        """Topology-generic closed-loop BACnet Priority 8 supervisory controller."""
         for crac in self.cracs.values():
             if not crac.enabled:
                 continue
@@ -603,12 +603,12 @@ class DataHallTwinEngine:
             if not zone_racks:
                 continue
             max_zone_inlet = max(r.inlet_temp_c for r in zone_racks)
-            if max_zone_inlet < 22.9:
-                crac.supply_air_setpoint_c = min(21.5, round(crac.supply_air_setpoint_c + 0.15, 2))
-                crac.fan_speed_pct = max(55.0, round(crac.fan_speed_pct - 1.2, 1))
-            elif max_zone_inlet > 24.3:
-                crac.supply_air_setpoint_c = max(16.5, round(crac.supply_air_setpoint_c - 0.25, 2))
-                crac.fan_speed_pct = min(96.0, round(crac.fan_speed_pct + 2.5, 1))
+            if max_zone_inlet < 23.2:
+                crac.supply_air_setpoint_c = min(21.2, round(crac.supply_air_setpoint_c + 0.55, 2))
+                crac.fan_speed_pct = max(56.0, round(crac.fan_speed_pct - 4.0, 1))
+            elif max_zone_inlet > 24.5:
+                crac.supply_air_setpoint_c = max(16.5, round(crac.supply_air_setpoint_c - 0.75, 2))
+                crac.fan_speed_pct = min(96.0, round(crac.fan_speed_pct + 6.0, 1))
 
         for cdu in self.cdus.values():
             if not cdu.enabled:
@@ -617,12 +617,27 @@ class DataHallTwinEngine:
             if not zone_racks:
                 continue
             max_chip = max(r.chip_temp_c for r in zone_racks)
-            if max_chip < 64.0:
-                cdu.supply_temp_setpoint_c = min(27.5, round(cdu.supply_temp_setpoint_c + 0.15, 2))
-                cdu.pump_speed_pct = max(62.0, round(cdu.pump_speed_pct - 1.0, 1))
-            elif max_chip > 69.5:
-                cdu.supply_temp_setpoint_c = max(20.0, round(cdu.supply_temp_setpoint_c - 0.3, 2))
-                cdu.pump_speed_pct = min(98.0, round(cdu.pump_speed_pct + 3.0, 1))
+            if max_chip < 64.5:
+                cdu.supply_temp_setpoint_c = min(26.8, round(cdu.supply_temp_setpoint_c + 0.6, 2))
+                cdu.pump_speed_pct = max(62.0, round(cdu.pump_speed_pct - 3.5, 1))
+            elif max_chip > 69.0:
+                cdu.supply_temp_setpoint_c = max(20.0, round(cdu.supply_temp_setpoint_c - 0.8, 2))
+                cdu.pump_speed_pct = min(98.0, round(cdu.pump_speed_pct + 6.0, 1))
+
+    def restore_manual_bms_defaults(self) -> None:
+        """Revert cooling units back to conservative Priority 16 local BMS static setpoints."""
+        for c_cfg in self.site_config.crac_units:
+            crac = self.cracs.get(c_cfg.crac_id)
+            if crac and crac.enabled:
+                crac.supply_air_setpoint_c = c_cfg.supply_air_setpoint_c
+                crac.fan_speed_pct = c_cfg.initial_fan_speed_pct
+
+        for cdu_cfg in self.site_config.cdu_units:
+            cdu = self.cdus.get(cdu_cfg.cdu_id)
+            if cdu and cdu.enabled:
+                cdu.supply_temp_setpoint_c = cdu_cfg.supply_temp_setpoint_c
+                if self.cdu_fouling_factor.get(cdu_cfg.cdu_id, 1.0) >= 0.9:
+                    cdu.pump_speed_pct = cdu_cfg.initial_pump_speed_pct
 
     def clone_for_whatif(self) -> "DataHallTwinEngine":
         """Create a fast deep-copy sandbox of the current twin state without mutating live state."""
