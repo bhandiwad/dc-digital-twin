@@ -14,6 +14,7 @@ Designed strictly around the real-world **Critical Facilities vs. Tenant IT dema
 ## Executive Deck, PDFs & Live Demo Playbook
 
 - **[Pandita AI — AI for Data Centres (Updated Platform Deck)](docs/Pandita_AI_for_Data_Centres_Updated_Deck.pdf)** — 14-slide widescreen presentation combining Pandita AI's data centre strategy with live product screenshots across cooling, 10k-GPU planning, predictive maintenance, fault triage, Copilot, and ROI.
+- **[AI Models, Architecture & Technology Stack (`docs/Aether_DCTWIN_AI_and_Architecture.pdf`)](docs/Aether_DCTWIN_AI_and_Architecture.pdf)** — Standalone 2-page reference detailing the 5-layer AI stack (`Claude`/`Gemini`/`GPT-4o`/`Ollama` tool-calling, `NetworkX GraphRAG`, `IsolationForest` + physics residuals, `NumPy RLS` calibration, `SciPy SLSQP` safe MPC), architecture, and deployment modes.
 - **[Master 6-Act Live Demo Playbook (`docs/DEMO_PLAYBOOK.md`)](docs/DEMO_PLAYBOOK.md)** — Click-by-click speaker walkthrough and plain-English talking tracks for customer and executive demos.
 - **[Simple 2-Page Product Overview (`docs/Aether_DCTWIN_Simple_Overview.pdf`)](docs/Aether_DCTWIN_Simple_Overview.pdf)** — Concise non-technical summary of business outcomes and facility-side safety.
 - **[2-Page Technology Stack Reference (`docs/Aether_DCTWIN_Technology_Stack.pdf`)](docs/Aether_DCTWIN_Technology_Stack.pdf)** — Breakdown of the 3D WebGL frontend, FastAPI/DuckDB backend, physics & SciPy solvers, and OT protocol boundary.
