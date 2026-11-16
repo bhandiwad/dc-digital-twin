@@ -147,7 +147,8 @@ const RackMesh: React.FC<{
   isSelected: boolean;
   onSelect: () => void;
   showPlumes: boolean;
-}> = ({ rack, overlayMode, isSelected, onSelect, showPlumes }) => {
+  lightMode: boolean;
+}> = ({ rack, overlayMode, isSelected, onSelect, showPlumes, lightMode }) => {
   const [hovered, setHovered] = useState(false);
   const pulseRef = useRef<THREE.Mesh>(null);
   const heatColor = useMemo(() => getRackHeatColor(rack, overlayMode), [rack, overlayMode]);
@@ -200,11 +201,31 @@ const RackMesh: React.FC<{
         }}
       >
         <meshStandardMaterial
-          color={isSelected || hovered ? '#1e293b' : '#0f172a'}
-          metalness={0.72}
-          roughness={0.3}
+          color={
+            lightMode
+              ? isSelected || hovered
+                ? '#cbd5e1'
+                : '#dde5ef'
+              : isSelected || hovered
+              ? '#1e293b'
+              : '#0f172a'
+          }
+          metalness={lightMode ? 0.18 : 0.72}
+          roughness={lightMode ? 0.52 : 0.3}
           emissive={heatColor}
-          emissiveIntensity={isSelected ? 0.38 : hovered ? 0.28 : 0.14}
+          emissiveIntensity={
+            lightMode
+              ? isSelected
+                ? 0.2
+                : hovered
+                ? 0.12
+                : 0.04
+              : isSelected
+              ? 0.38
+              : hovered
+              ? 0.28
+              : 0.14
+          }
         />
       </RoundedBox>
 
@@ -267,7 +288,8 @@ const CRACUnitMesh: React.FC<{
   crac: CRACTelemetry;
   isSelected: boolean;
   onSelect: () => void;
-}> = ({ crac, isSelected, onSelect }) => {
+  lightMode: boolean;
+}> = ({ crac, isSelected, onSelect, lightMode }) => {
   const [hovered, setHovered] = useState(false);
   const color = !crac.enabled ? '#ef4444' : isSelected ? '#38bdf8' : '#3b82f6';
   const showLabel = !crac.enabled || isSelected || hovered;
@@ -289,11 +311,11 @@ const CRACUnitMesh: React.FC<{
         }}
       >
         <meshStandardMaterial
-          color="#0f172a"
-          metalness={0.6}
-          roughness={0.32}
+          color={lightMode ? (!crac.enabled ? '#fecaca' : '#bfdbfe') : '#0f172a'}
+          metalness={lightMode ? 0.2 : 0.6}
+          roughness={lightMode ? 0.5 : 0.32}
           emissive={color}
-          emissiveIntensity={isSelected || hovered ? 0.42 : 0.26}
+          emissiveIntensity={lightMode ? (isSelected || hovered ? 0.28 : 0.14) : isSelected || hovered ? 0.42 : 0.26}
         />
       </RoundedBox>
       {showLabel && (
@@ -325,7 +347,8 @@ const CDUUnitMesh: React.FC<{
   cdu: CDUTelemetry;
   isSelected: boolean;
   onSelect: () => void;
-}> = ({ cdu, isSelected, onSelect }) => {
+  lightMode: boolean;
+}> = ({ cdu, isSelected, onSelect, lightMode }) => {
   const [hovered, setHovered] = useState(false);
   const color =
     cdu.status === 'critical' ? '#ef4444' : cdu.status === 'warning' ? '#f59e0b' : '#0ea5e9';
@@ -348,11 +371,11 @@ const CDUUnitMesh: React.FC<{
         }}
       >
         <meshStandardMaterial
-          color="#083344"
-          metalness={0.68}
-          roughness={0.28}
+          color={lightMode ? '#bae6fd' : '#083344'}
+          metalness={lightMode ? 0.22 : 0.68}
+          roughness={lightMode ? 0.48 : 0.28}
           emissive={color}
-          emissiveIntensity={isSelected || hovered ? 0.5 : 0.3}
+          emissiveIntensity={lightMode ? (isSelected || hovered ? 0.3 : 0.16) : isSelected || hovered ? 0.5 : 0.3}
         />
       </RoundedBox>
       {showLabel && (
@@ -384,7 +407,8 @@ const PDUUnitMesh: React.FC<{
   pdu: PDUTelemetry;
   isSelected: boolean;
   onSelect: () => void;
-}> = ({ pdu, isSelected, onSelect }) => {
+  lightMode: boolean;
+}> = ({ pdu, isSelected, onSelect, lightMode }) => {
   const [hovered, setHovered] = useState(false);
   const showLabel = isSelected || hovered || pdu.load_pct >= 80;
 
@@ -405,11 +429,11 @@ const PDUUnitMesh: React.FC<{
         }}
       >
         <meshStandardMaterial
-          color="#1e1b4b"
-          metalness={0.65}
-          roughness={0.35}
+          color={lightMode ? '#c7d2fe' : '#1e1b4b'}
+          metalness={lightMode ? 0.2 : 0.65}
+          roughness={lightMode ? 0.5 : 0.35}
           emissive={isSelected || hovered ? '#818cf8' : '#6366f1'}
-          emissiveIntensity={isSelected || hovered ? 0.42 : 0.25}
+          emissiveIntensity={lightMode ? (isSelected || hovered ? 0.28 : 0.14) : isSelected || hovered ? 0.42 : 0.25}
         />
       </RoundedBox>
       {showLabel && (
@@ -533,6 +557,7 @@ export const DataHall3D: React.FC<DataHall3DProps> = ({
             isSelected={selectedId === rk.rack_id}
             onSelect={() => onSelectComponent(rk.rack_id, 'rack')}
             showPlumes={showPlumes}
+            lightMode={lightMode}
           />
         ))}
 
@@ -542,6 +567,7 @@ export const DataHall3D: React.FC<DataHall3DProps> = ({
             crac={crac}
             isSelected={selectedId === crac.crac_id}
             onSelect={() => onSelectComponent(crac.crac_id, 'crac')}
+            lightMode={lightMode}
           />
         ))}
 
@@ -551,6 +577,7 @@ export const DataHall3D: React.FC<DataHall3DProps> = ({
             cdu={cdu}
             isSelected={selectedId === cdu.cdu_id}
             onSelect={() => onSelectComponent(cdu.cdu_id, 'cdu')}
+            lightMode={lightMode}
           />
         ))}
 
@@ -560,6 +587,7 @@ export const DataHall3D: React.FC<DataHall3DProps> = ({
             pdu={pdu}
             isSelected={selectedId === pdu.pdu_id}
             onSelect={() => onSelectComponent(pdu.pdu_id, 'pdu')}
+            lightMode={lightMode}
           />
         ))}
 
