@@ -127,7 +127,7 @@ Located directly above the bottom telemetry charts:
 
 Click **`BYOD & Connectors`** in the top-right header bar to open the enterprise onboarding modal:
 - **Mode 1 (`BYOD CSV / Historian Ingest`)**:
-  - Click any of the 3 vendor templates (**Schneider EcoStruxure**, **NVIDIA DCGM Export**, **Sunbird / OSIsoft PI**) or click **`Choose Local CSV File...`** to upload a prospect's `.csv` export.
+  - Click any of the 3 built-in BMS/DCIM templates (**Enterprise BMS Export**, **Liquid Cooling Telemetry Export**, **Facility Historian Export**) or click **`Choose Local CSV File...`** to upload a `.csv` export.
   - Click **`Ingest into DuckDB/Parquet & Calibrate 3D Digital Twin`**. The AI Schema Auto-Mapper matches their vendor column names, writes a `.parquet` dataset, calibrates the 3D twin to their peak thermal interval, and loads their trace into the 24h replay bar.
 - **Mode 2 (`Live Protocol Bridges`)**:
   - Select **BACnet/IP & Modbus TCP**, **NVIDIA DCGM Prometheus**, **DMTF Redfish / OpenBMC**, or **MQTT Sparkplug B** and click **`Test Handshake & Poll Live Frame`** to inspect live register/metric mappings and raw protocol payloads.
@@ -152,5 +152,5 @@ Click **`Executive ROI Report`** in the top-right header bar:
    - In the **`ML / MOP`** tab, show the **Constrained MPC** 30-minute lookahead trajectory keeping temperatures inside ASHRAE A1 barriers, then switch to **`GraphRAG SOP / MOP`** to generate an instant 5-step LOTO procedure to service `CDU-1`.
 4. **Minute 4 — Autonomous OpenRouter AI Agent Remediation**:
    - Open the **`Agent`** tab and click *"Execute remediation and optimize setpoints now"*. Watch the Agent invoke `execute_cooling_setpoints`, enable **AI Auto-Pilot**, and bring PUE down to `~1.15`.
-5. **Minute 5 — Customer BYOD Upload & Executive ROI Close**:
-   - Open **`BYOD & Connectors`**, ingest the **Schneider EcoStruxure BMS** CSV in one click, and open **`Executive ROI Report`** to show **~$199k/year in OpEx savings**, **+254 unlocked AI GPUs**, and a **3.2-month payback**.
+5. **Minute 5 — BYOD Upload & Executive ROI Close**:
+   - Open **`Data`**, ingest a sample **Enterprise BMS** CSV in one click, and open the **`ROI`** tab to show **~\$194k/year in OpEx savings**, **+248 unlocked AI GPUs**, and a **3.2-month payback**.

@@ -185,7 +185,7 @@ sequenceDiagram
 Implemented in [`backend/telemetry_store.py`](file:///Users/pb/dctwin/backend/telemetry_store.py) and [`backend/connectors.py`](file:///Users/pb/dctwin/backend/connectors.py).
 
 - **Table Schema (`telemetry_24h`)**: Stores `288 × 5-minute` intervals per dataset (`kaggle_green_ai_24h`, `ornl_frontier_cdu_24h`, `ieee_ashrae_fault_24h`, plus any customer `byod_*` dataset) and exports each dataset directly to `data/<dataset_id>.parquet`.
-- **Fuzzy Column Matching (`CANONICAL_FIELD_ALIASES`)**: Maps arbitrary vendor CSV column headers (e.g., `Schneider_IT_Load_kW`, `dcgm_fi_dev_gpu_temp`, `ashrae_max_inlet_c`) to canonical physics fields, normalizes `Watts → kW`, computes missing PUE/cooling balances, writes a new Parquet file, and synchronizes the 3D twin to the customer's peak thermal interval.
+- **Fuzzy Column Matching (`CANONICAL_FIELD_ALIASES`)**: Maps arbitrary BMS/DCIM CSV column headers (e.g., `Facility_IT_Load_kW`, `cdu_return_temp_c`, `ashrae_max_inlet_c`) to canonical physics fields, normalizes `Watts → kW`, computes missing PUE/cooling balances, writes a new Parquet file, and synchronizes the 3D twin to the peak thermal interval.
 
 ---
 
@@ -223,6 +223,6 @@ Implemented in [`frontend/src/components/DataHall3D.tsx`](file:///Users/pb/dctwi
 | `POST /api/replay/seek` | `ReplaySeekRequest` | Synchronize the live 32-rack 3D Digital Twin to a historical 5-minute step. |
 | `GET /api/connectors` | — | List industrial protocol connectors (`BACnet/Modbus`, `NVIDIA DCGM`, `Redfish`, `MQTT`). |
 | `POST /api/connectors/test` | `ConnectorTestRequest` | Poll a live protocol frame and calibrate the twin. |
-| `GET /api/connectors/sample-csv/{vendor}` | `schneider_bms`, `nvidia_dcgm`, `sunbird_dcim` | Download a realistic 24h vendor CSV file for BYOD testing. |
+| `GET /api/connectors/sample-csv/{template}` | Sample BMS / DCIM / liquid cooling template ID | Download a realistic 24h facility CSV file for BYOD testing. |
 | `POST /api/connectors/ingest-byod` | `BYODIngestRequest` | Auto-map customer CSV columns, save to DuckDB/Parquet, and calibrate the 3D twin. |
 | `GET /api/roi-report` | — | Generate the `ExecutiveROIReport` (PUE, OpEx `$`, MWh, tCO₂, unlocked GPUs, 5-year NPV, Markdown export). |

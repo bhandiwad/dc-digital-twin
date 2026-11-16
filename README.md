@@ -119,7 +119,7 @@ dctwin/
 │   │   └── features/                  # Drop-in conflict-free feature routers (PRD-01..PRD-10)
 │   ├── simulator.py                   # Topology-generic coupled electro-thermal engine + NetworkX graph
 │   ├── telemetry_store.py             # DuckDB + Parquet 24-hour historian & SQL engine
-│   ├── connectors.py                  # BACnet/Modbus/CoolIT CDU/SNMP EPMS/Sparkplug bridges & BYOD mapper
+│   ├── connectors.py                  # BACnet/Modbus/Liquid CDU/SNMP EPMS/Sparkplug bridges & BYOD mapper
 │   ├── llm_agent.py                   # OpenRouter / OpenAI tool-calling agent loop
 │   └── main.py                        # Thin 89-line FastAPI entrypoint
 ├── frontend/src/

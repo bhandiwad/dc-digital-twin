@@ -9,7 +9,7 @@ This guide translates Data Center Critical Facilities concepts directly into sof
 
 ## 1. The Golden Rule: The "Church & State" Demarcation Boundary
 
-In every enterprise and colocation data center (Equinix, Digital Realty, NTT, CyrusOne, hyperscale), there are two completely separate organizations:
+In every enterprise, colocation, and hyperscale data center, there are two completely separate organizations:
 1. **Critical Facilities Ops (Our Customer)**: Owns the building power chain (`Utility -> Transformer -> UPS -> 415V Row PDU -> Rack Whip`) and cooling plant (`Chiller -> Cooling Tower -> CRAC Air Units -> Liquid CDUs -> Cold-Aisle / Manifold Sensors`).
 2. **Tenant IT / Compute Ops (NOT Our Scope)**: Owns what runs inside the 42U servers (Linux OS, GPUs, Kubernetes, Slurm, workloads).
 
