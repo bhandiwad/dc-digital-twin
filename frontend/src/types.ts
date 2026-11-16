@@ -595,6 +595,93 @@ export interface ClusterScaleResponse {
   architectural_changes: string[];
 }
 
+// --- 5 Multi-Step Agentic Workflows ---
+
+export type AgentWorkflowId =
+  | 'redteam_change'
+  | 'incident_commander'
+  | 'shift_handover'
+  | 'colo_deal_desk'
+  | 'stranded_power';
+
+export type WorkspaceTabId = 'launchpad' | 'twin_3d' | AgentWorkflowId;
+
+export interface AgentKPICard {
+  label: string;
+  value: string;
+  subtext: string;
+  tone: 'good' | 'warn' | 'bad' | 'info';
+}
+
+export interface AgentStepTrace {
+  step: number;
+  tool_name: string;
+  title: string;
+  duration_ms: number;
+  status: 'ok' | 'warn' | 'alert';
+  summary: string;
+  metrics: Record<string, string>;
+}
+
+export interface AgentChecklistItem {
+  label: string;
+  detail: string;
+  priority: string;
+}
+
+export interface AgentTimelineEvent {
+  time_label: string;
+  title: string;
+  detail: string;
+  tone: 'good' | 'warn' | 'bad' | 'info';
+}
+
+export interface AgentReportSection {
+  id: string;
+  title: string;
+  subtitle?: string | null;
+  kind: 'table' | 'checklist' | 'timeline' | 'document';
+  columns: string[];
+  rows: string[][];
+  checklist: AgentChecklistItem[];
+  timeline: AgentTimelineEvent[];
+  document_markdown?: string | null;
+}
+
+export interface AgentWorkflowRunRequest {
+  preset_id?: string;
+  target_component_id?: string;
+  window_hour_local?: number;
+  forecast_wetbulb_c?: number;
+  duration_minutes?: number;
+  procedure_summary?: string;
+  incident_scenario_id?: string;
+  sync_to_live_hall?: boolean;
+  shift_window?: string;
+  dataset_id?: string;
+  customer_rfp_summary?: string;
+  requested_kw?: number;
+  requested_racks?: number;
+  cooling_preference?: 'liquid_dlc' | 'air_only';
+  target_pue_cap?: number;
+  audit_scope?: 'full_hall' | 'air_rows' | 'liquid_rows';
+  breaker_limit_pct?: number;
+}
+
+export interface AgentWorkflowResult {
+  workflow_id: AgentWorkflowId;
+  title: string;
+  verdict_status: 'approved' | 'conditional' | 'blocked' | 'critical_action' | 'opportunity';
+  verdict_badge: string;
+  executive_summary: string;
+  focus_asset_id?: string | null;
+  focus_asset_type?: 'rack' | 'crac' | 'cdu' | 'pdu' | null;
+  kpis: AgentKPICard[];
+  tool_steps: AgentStepTrace[];
+  sections: AgentReportSection[];
+}
+
+
 
 
 

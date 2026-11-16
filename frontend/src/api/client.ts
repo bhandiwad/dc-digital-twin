@@ -1,5 +1,8 @@
 import {
   AgentCopilotResponse,
+  AgentWorkflowId,
+  AgentWorkflowResult,
+  AgentWorkflowRunRequest,
   ClusterScaleRequest,
   ClusterScaleResponse,
   TwinStateSnapshot,
@@ -107,3 +110,17 @@ export async function postCopilotQuery(params: {
   if (!res.ok) throw new Error(`Failed to run Copilot query: ${res.status}`);
   return res.json();
 }
+
+export async function runAgenticWorkflow(
+  workflowId: AgentWorkflowId,
+  payload: AgentWorkflowRunRequest
+): Promise<AgentWorkflowResult> {
+  const res = await fetch(`/api/agents/${workflowId}/run`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(`Failed to execute workflow ${workflowId}: ${res.status}`);
+  return res.json();
+}
+

@@ -9,6 +9,7 @@ import {
   Cpu,
   FlaskConical,
   LayoutDashboard,
+  LayoutGrid,
   Moon,
   Puzzle,
   RefreshCw,
@@ -17,12 +18,15 @@ import {
   Sparkles,
   Sun,
   TrendingUp,
+  X,
 } from 'lucide-react';
 import {
+  AgentWorkflowId,
   TwinStateSnapshot,
   OverlayMode,
   WhatIfRequest,
   WhatIfResponse,
+  WorkspaceTabId,
 } from './types';
 import {
   applyOptimizationSetpoints,
@@ -48,6 +52,8 @@ import {
   CopilotMessageItem,
 } from './components/workbench/AgentCopilotPanel';
 import { DISCOVERED_FEATURE_PLUGINS } from './components/workbench/featureTabs';
+import { USE_CASE_CATALOG, UseCaseLaunchpad } from './components/UseCaseLaunchpad';
+import { AgentWorkflowWorkspace } from './components/AgentWorkflowWorkspace';
 
 const SCENARIO_PRESETS = [
   { id: 'normal', label: 'Normal Operation', desc: 'Balanced air and liquid cooling baseline' },
@@ -65,6 +71,8 @@ export const App: React.FC = () => {
   const [showPlumes, setShowPlumes] = useState<boolean>(false);
   const [selectedId, setSelectedId] = useState<string>('');
   const [selectedType, setSelectedType] = useState<'rack' | 'crac' | 'cdu' | 'pdu'>('rack');
+  const [openWorkspaces, setOpenWorkspaces] = useState<WorkspaceTabId[]>(['launchpad']);
+  const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceTabId>('launchpad');
   const [activeTab, setActiveTab] = useState<string>('overview');
   const [bottomDock, setBottomDock] = useState<'none' | 'trends' | 'replay'>('none');
   const [scenarioMenuOpen, setScenarioMenuOpen] = useState<boolean>(false);
@@ -295,6 +303,38 @@ export const App: React.FC = () => {
   ];
   const activePlugin = DISCOVERED_FEATURE_PLUGINS.find((p) => p.id === activeTab);
 
+  const openUseCaseTab = (id: Exclude<WorkspaceTabId, 'launchpad'>) => {
+    setOpenWorkspaces((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    setActiveWorkspace(id);
+  };
+
+  const closeUseCaseTab = (id: Exclude<WorkspaceTabId, 'launchpad'>, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setOpenWorkspaces((prev) => {
+      const idx = prev.indexOf(id);
+      const next = prev.filter((t) => t !== id);
+      if (activeWorkspace === id) {
+        const fallback = next[Math.max(0, idx - 1)] || 'launchpad';
+        setActiveWorkspace(fallback);
+      }
+      return next;
+    });
+  };
+
+  const handleInspectIn3D = (
+    assetId?: string | null,
+    assetType?: 'rack' | 'crac' | 'cdu' | 'pdu' | null
+  ) => {
+    openUseCaseTab('twin_3d');
+    if (assetId) {
+      setSelectedId(assetId);
+      setSelectedType(assetType || 'rack');
+      setActiveTab('inspect');
+    } else {
+      setActiveTab('overview');
+    }
+  };
+
   return (
     <div className="h-screen w-screen flex flex-col bg-[#090d16] text-slate-100 select-none overflow-hidden">
       <DataConnectorsModal
@@ -313,22 +353,27 @@ export const App: React.FC = () => {
       <header className="h-14 border-b border-slate-800/80 bg-slate-950/95 px-5 flex items-center justify-between shrink-0 z-30">
         {/* Brand & Live Status */}
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-sky-500/15 border border-sky-500/30 flex items-center justify-center">
-            <Cpu className="w-4 h-4 text-sky-400" />
-          </div>
-          <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => setActiveWorkspace('launchpad')}
+            className="flex items-center gap-3 hover:opacity-90 transition-opacity"
+            title="Return to All Use Cases Launchpad"
+          >
+            <div className="w-8 h-8 rounded-lg bg-sky-500/15 border border-sky-500/30 flex items-center justify-center">
+              <Cpu className="w-4 h-4 text-sky-400" />
+            </div>
             <span className="font-semibold tracking-tight text-sm text-white">
               Pandita&apos;s Aether-DCTWIN
             </span>
-            <span className="flex items-center gap-1.5 text-[11px] text-slate-400 px-2 py-0.5 rounded-full bg-slate-900 border border-slate-800">
-              <span
-                className={`w-1.5 h-1.5 rounded-full ${
-                  wsConnected ? 'bg-emerald-400' : 'bg-amber-400'
-                }`}
-              />
-              {wsConnected ? 'Live' : 'Reconnecting'}
-            </span>
-          </div>
+          </button>
+          <span className="flex items-center gap-1.5 text-[11px] text-slate-400 px-2 py-0.5 rounded-full bg-slate-900 border border-slate-800">
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${
+                wsConnected ? 'bg-emerald-400' : 'bg-amber-400'
+              }`}
+            />
+            {wsConnected ? 'Live' : 'Reconnecting'}
+          </span>
         </div>
 
         {/* Clean Borderless KPI Strip */}
@@ -371,7 +416,10 @@ export const App: React.FC = () => {
           <div className="h-4 w-px bg-slate-800" />
 
           <button
-            onClick={() => setActiveTab('overview')}
+            onClick={() => {
+              openUseCaseTab('twin_3d');
+              setActiveTab('overview');
+            }}
             className="flex items-center gap-1.5 hover:opacity-85 transition-opacity"
           >
             <span className="text-slate-400">Alerts</span>
@@ -432,7 +480,76 @@ export const App: React.FC = () => {
         </div>
       </header>
 
-      {/* Main Workspace Split */}
+      {/* Dynamic Use-Case Workspace Tab Strip */}
+      <nav className="h-10 border-b border-slate-800/80 bg-slate-950/80 px-4 flex items-center gap-1.5 overflow-x-auto shrink-0 z-20">
+        <button
+          type="button"
+          onClick={() => setActiveWorkspace('launchpad')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors shrink-0 ${
+            activeWorkspace === 'launchpad'
+              ? 'bg-sky-500/15 text-sky-300 border border-sky-500/35'
+              : 'text-slate-400 hover:text-white hover:bg-slate-900'
+          }`}
+        >
+          <LayoutGrid className="w-3.5 h-3.5" />
+          <span>All Use Cases</span>
+        </button>
+
+        {openWorkspaces.length > 1 && <div className="h-4 w-px bg-slate-800 mx-0.5 shrink-0" />}
+
+        {openWorkspaces
+          .filter((id): id is Exclude<WorkspaceTabId, 'launchpad'> => id !== 'launchpad')
+          .map((tabId) => {
+            const meta = USE_CASE_CATALOG.find((c) => c.id === tabId);
+            if (!meta) return null;
+            const TabIcon = meta.icon;
+            const isActive = activeWorkspace === tabId;
+            return (
+              <div
+                key={tabId}
+                onClick={() => setActiveWorkspace(tabId)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') setActiveWorkspace(tabId);
+                }}
+                className={`group pl-3 pr-2 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 cursor-pointer transition-colors shrink-0 border ${
+                  isActive
+                    ? 'bg-slate-900 text-white border-slate-700 shadow-sm'
+                    : 'bg-transparent border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+                }`}
+              >
+                <TabIcon className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                <span>{meta.shortTabLabel}</span>
+                <button
+                  type="button"
+                  onClick={(e) => closeUseCaseTab(tabId, e)}
+                  title={`Close ${meta.shortTabLabel} tab`}
+                  className="p-0.5 rounded hover:bg-slate-800 text-slate-500 hover:text-slate-200 transition-colors"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            );
+          })}
+      </nav>
+
+      {/* Active Workspace Body */}
+      {activeWorkspace === 'launchpad' ? (
+        <UseCaseLaunchpad
+          snapshot={snapshot}
+          openTabs={openWorkspaces}
+          onOpenUseCase={(id) => openUseCaseTab(id)}
+        />
+      ) : activeWorkspace !== 'twin_3d' ? (
+        <AgentWorkflowWorkspace
+          workflowId={activeWorkspace as AgentWorkflowId}
+          snapshot={snapshot}
+          onInspectIn3D={handleInspectIn3D}
+          onTriggerLiveScenario={handleScenario}
+          onEnableAutoPilot={() => handleUpdateControl({ auto_optimize: true })}
+        />
+      ) : (
       <div className="flex-1 flex min-h-0">
         {/* Left: Spacious 3D Data Hall + Collapsible Bottom Dock */}
         <div className="flex-1 flex flex-col relative min-w-0">
@@ -711,6 +828,7 @@ export const App: React.FC = () => {
           </div>
         </aside>
       </div>
+      )}
     </div>
   );
 };

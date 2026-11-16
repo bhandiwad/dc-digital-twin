@@ -152,3 +152,65 @@ def test_10k_gpu_cluster_scale_out_planner(api_client):
     assert res_air.status_code == 200
     assert res_air.json()["feasible"] is False
 
+
+def test_five_agentic_workflows_endpoints(api_client):
+    # 1. Change-Window Red-Team (afternoon heatwave -> blocked; cool off-peak -> approved)
+    r_block = api_client.post(
+        "/api/agents/redteam_change/run",
+        json={
+            "target_component_id": "CDU-1",
+            "window_hour_local": 15,
+            "forecast_wetbulb_c": 28.5,
+            "duration_minutes": 45,
+        },
+    )
+    assert r_block.status_code == 200
+    assert r_block.json()["verdict_status"] == "blocked"
+    assert len(r_block.json()["tool_steps"]) == 4
+
+    r_ok = api_client.post(
+        "/api/agents/redteam_change/run",
+        json={
+            "target_component_id": "PDU-A",
+            "window_hour_local": 3,
+            "forecast_wetbulb_c": 17.5,
+            "duration_minutes": 30,
+        },
+    )
+    assert r_ok.status_code == 200
+    assert r_ok.json()["verdict_status"] in ("approved", "conditional")
+
+    # 2. Incident Commander & Auto-RCA
+    r_inc = api_client.post(
+        "/api/agents/incident_commander/run",
+        json={"incident_scenario_id": "crac_2_fail", "sync_to_live_hall": False},
+    )
+    assert r_inc.status_code == 200
+    assert r_inc.json()["verdict_status"] == "critical_action"
+    assert any(s["kind"] == "document" for s in r_inc.json()["sections"])
+
+    # 3. Silent-Drift & Shift-Handover Investigator
+    r_shift = api_client.post(
+        "/api/agents/shift_handover/run",
+        json={"shift_window": "day_to_night", "dataset_id": "kaggle_green_ai_24h"},
+    )
+    assert r_shift.status_code == 200
+    assert len(r_shift.json()["kpis"]) == 4
+
+    # 4. Colocation Deal-Desk & RFP Fit-Out
+    r_deal = api_client.post(
+        "/api/agents/colo_deal_desk/run",
+        json={"requested_kw": 850.0, "requested_racks": 10, "cooling_preference": "liquid_dlc"},
+    )
+    assert r_deal.status_code == 200
+    assert r_deal.json()["workflow_id"] == "colo_deal_desk"
+
+    # 5. Stranded Power & Ghost-Capacity Recovery
+    r_strand = api_client.post(
+        "/api/agents/stranded_power/run",
+        json={"audit_scope": "full_hall", "breaker_limit_pct": 80.0},
+    )
+    assert r_strand.status_code == 200
+    assert r_strand.json()["verdict_status"] == "opportunity"
+
+

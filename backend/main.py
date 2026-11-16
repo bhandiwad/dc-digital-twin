@@ -18,6 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from api.deps import runtime
 from api.plugin_loader import register_feature_plugins
 from api.routers import (
+    agentic_workflows,
     copilot_llm,
     energy_roi,
     ml_control,
@@ -78,6 +79,7 @@ app.include_router(ml_control.router)
 app.include_router(energy_roi.router)
 app.include_router(replay_connectors.router)
 app.include_router(copilot_llm.router)
+app.include_router(agentic_workflows.router)
 register_feature_plugins(app)
 
 FRONTEND_DIST = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend", "dist"))
