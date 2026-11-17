@@ -22,6 +22,9 @@ interface DataHall3DProps {
 }
 
 function getRackHeatColor(rack: RackTelemetry, mode: OverlayMode): string {
+  if (rack.occupancy_status === 'dark_spare' && mode !== 'cooling_type') {
+    return '#475569';
+  }
   if (mode === 'inlet_temp') {
     const t = rack.inlet_temp_c;
     if (t >= 29.0) return '#ef4444';
@@ -31,18 +34,20 @@ function getRackHeatColor(rack: RackTelemetry, mode: OverlayMode): string {
     return '#0ea5e9';
   }
   if (mode === 'chip_temp') {
-    const t = rack.chip_temp_c;
-    if (t >= 76.0) return '#ef4444';
-    if (t >= 69.0) return '#f97316';
-    if (t >= 62.0) return '#eab308';
-    if (t >= 54.0) return '#10b981';
+    // Facility Demarcation Return Temp (Manifold Return °C or Hot-Aisle Exhaust °C)
+    const ret = rack.coolant_return_temp_c ?? rack.outlet_temp_c;
+    if (ret >= 39.0) return '#ef4444';
+    if (ret >= 35.5) return '#f97316';
+    if (ret >= 32.5) return '#eab308';
+    if (ret >= 28.0) return '#10b981';
     return '#3b82f6';
   }
   if (mode === 'power_kw') {
+    if (rack.occupancy_status === 'ghost_reservation') return '#0284c7';
     const ratio = rack.power_kw / Math.max(rack.max_power_kw, 1);
-    if (ratio >= 0.88) return '#ec4899';
-    if (ratio >= 0.72) return '#a855f7';
-    if (ratio >= 0.55) return '#6366f1';
+    if (ratio >= 0.78) return '#ec4899';
+    if (ratio >= 0.62) return '#a855f7';
+    if (ratio >= 0.45) return '#6366f1';
     return '#3b82f6';
   }
   if (mode === 'anomaly') {
@@ -164,11 +169,14 @@ const RackMesh: React.FC<{
   });
 
   const metricLabel = useMemo(() => {
+    if (rack.occupancy_status === 'dark_spare') return 'Spare Bay';
     if (overlayMode === 'inlet_temp') return `${rack.inlet_temp_c.toFixed(1)}°C`;
-    if (overlayMode === 'chip_temp') return `${rack.chip_temp_c.toFixed(0)}°C`;
-    if (overlayMode === 'power_kw') return `${rack.power_kw.toFixed(0)} kW`;
+    if (overlayMode === 'chip_temp')
+      return `Ret ${(rack.coolant_return_temp_c ?? rack.outlet_temp_c).toFixed(1)}°C`;
+    if (overlayMode === 'power_kw')
+      return `${rack.power_kw.toFixed(0)}/${(rack.contracted_power_kw ?? rack.max_power_kw).toFixed(0)} kW`;
     if (overlayMode === 'anomaly') return `${(rack.anomaly_score * 100).toFixed(0)}%`;
-    return rack.cooling_type === 'hybrid_liquid' ? 'Liquid' : 'Air';
+    return `${rack.whip_phase || 'L1-L2'} · ${rack.cooling_type === 'hybrid_liquid' ? 'Liquid' : 'Air'}`;
   }, [rack, overlayMode]);
 
   return (

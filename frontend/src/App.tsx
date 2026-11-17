@@ -7,6 +7,7 @@ import {
   ChevronDown,
   Clock,
   Cpu,
+  Eye,
   FlaskConical,
   LayoutDashboard,
   LayoutGrid,
@@ -14,6 +15,7 @@ import {
   Puzzle,
   RefreshCw,
   RotateCcw,
+  ShieldCheck,
   Sliders,
   Sparkles,
   Sun,
@@ -29,7 +31,6 @@ import {
   WorkspaceTabId,
 } from './types';
 import {
-  applyOptimizationSetpoints,
   fetchLlmConfig,
   fetchTwinState,
   postCoolingControl,
@@ -191,14 +192,6 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleApplyOptimization = async () => {
-    try {
-      setSnapshot(await applyOptimizationSetpoints());
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
   const handleUpdateControl = async (payload: Record<string, unknown>) => {
     try {
       setSnapshot(await postCoolingControl(payload));
@@ -286,6 +279,18 @@ export const App: React.FC = () => {
 
   const airRackCount = snapshot.racks.filter((r) => r.cooling_type === 'air').length;
   const liquidRackCount = snapshot.racks.filter((r) => r.cooling_type === 'hybrid_liquid').length;
+  const bmsMode = (facility.bms_control_mode ||
+    (optimization.auto_pilot_active ? 'bounded_autotrim' : 'shadow')) as
+    | 'shadow'
+    | 'advisory'
+    | 'bounded_autotrim';
+
+  const nextBmsMode =
+    bmsMode === 'shadow'
+      ? 'advisory'
+      : bmsMode === 'advisory'
+      ? 'bounded_autotrim'
+      : 'shadow';
 
   const coreTabs: Array<{
     id: string;
@@ -438,27 +443,29 @@ export const App: React.FC = () => {
         {/* Right Utility Actions */}
         <div className="flex items-center gap-2">
           <button
-            onClick={() => handleUpdateControl({ auto_optimize: !optimization.auto_pilot_active })}
-            title={
-              optimization.auto_pilot_active
-                ? 'Auto-Pilot is actively tuning fans, pumps & supply temps — click to switch back to Manual Mode'
-                : 'Manual Mode (fixed setpoints) — click to enable Auto-Pilot smart cooling'
-            }
+            onClick={() => handleUpdateControl({ bms_control_mode: nextBmsMode })}
+            title="Cycle 3-Stage BMS Supervisory Posture: 1. Shadow (Read-Only) → 2. Advisory (Operator Sign-Off) → 3. Bounded Auto-Trim (±2°C Guardband)"
             className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 border transition-colors tabular-nums ${
-              optimization.auto_pilot_active
+              bmsMode === 'bounded_autotrim'
                 ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
+                : bmsMode === 'advisory'
+                ? 'bg-sky-500/15 border-sky-500/40 text-sky-300'
                 : 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-slate-300'
             }`}
           >
-            <Sparkles
-              className={`w-3.5 h-3.5 ${
-                optimization.auto_pilot_active ? 'text-emerald-400' : 'text-slate-400'
-              }`}
-            />
+            {bmsMode === 'bounded_autotrim' ? (
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+            ) : bmsMode === 'advisory' ? (
+              <Sparkles className="w-3.5 h-3.5 text-sky-400" />
+            ) : (
+              <Eye className="w-3.5 h-3.5 text-slate-400" />
+            )}
             <span>
-              {optimization.auto_pilot_active
-                ? `Auto-Pilot On (-${optimization.power_saved_kw.toFixed(0)} kW)`
-                : 'Auto-Pilot Off'}
+              {bmsMode === 'bounded_autotrim'
+                ? `Bounded Trim (-${optimization.power_saved_kw.toFixed(0)} kW)`
+                : bmsMode === 'advisory'
+                ? 'BMS: Advisory Mode'
+                : 'BMS: Shadow Mode'}
             </span>
           </button>
 
@@ -547,7 +554,7 @@ export const App: React.FC = () => {
           snapshot={snapshot}
           onInspectIn3D={handleInspectIn3D}
           onTriggerLiveScenario={handleScenario}
-          onEnableAutoPilot={() => handleUpdateControl({ auto_optimize: true })}
+          onUpdateControl={handleUpdateControl}
         />
       ) : (
       <div className="flex-1 flex min-h-0">
@@ -561,7 +568,7 @@ export const App: React.FC = () => {
                 [
                   ['inlet_temp', 'Inlet °C'],
                   ['power_kw', 'Rack kW'],
-                  ['chip_temp', 'Thermal'],
+                  ['chip_temp', 'Return °C'],
                   ['cooling_type', 'Cooling'],
                   ['anomaly', 'Risk'],
                 ] as [OverlayMode, string][]
@@ -765,10 +772,10 @@ export const App: React.FC = () => {
           <div className="flex-1 overflow-y-auto p-4">
             {activeTab === 'overview' && (
               <OverviewOptimizePanel
+                facility={facility}
                 optimization={optimization}
                 anomalies={anomalies}
-                onApplyOptimization={handleApplyOptimization}
-                onToggleAutoPilot={(enable) => handleUpdateControl({ auto_optimize: enable })}
+                onUpdateControl={handleUpdateControl}
                 onSelectRackAnomaly={(rackId) => {
                   setSelectedId(rackId);
                   setSelectedType('rack');

@@ -167,7 +167,8 @@ class OptimizerWhatIfService:
         annual_kwh_saved = max(4.5, power_saved_kw) * 8760.0
         annual_cost_usd = round(annual_kwh_saved * econ.blended_electricity_usd_per_kwh, 0)
         annual_carbon_tons = round((annual_kwh_saved * latest.carbon_intensity_g_per_kwh) / 1_000_000.0, 1)
-        min_margin = min(r.thermal_margin_c for r in engine.racks.values())
+        active_racks = [r for r in engine.racks.values() if r.occupancy_status != "dark_spare"] or list(engine.racks.values())
+        min_margin = min(27.0 - r.inlet_temp_c for r in active_racks)
 
         return OptimizationRecommendation(
             current_pue=latest.pue,

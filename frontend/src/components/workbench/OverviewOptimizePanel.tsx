@@ -2,31 +2,36 @@ import React, { useEffect, useState } from 'react';
 import {
   AlertTriangle,
   BatteryCharging,
+  Check,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  Eye,
+  Gauge,
   RotateCcw,
+  ShieldCheck,
   Sparkles,
 } from 'lucide-react';
 import {
   AnomalyEvent,
   EnergyGridManagementState,
+  FacilityMetrics,
   OptimizationRecommendation,
 } from '../../types';
 
 export interface OverviewOptimizePanelProps {
+  facility: FacilityMetrics;
   optimization: OptimizationRecommendation;
   anomalies: AnomalyEvent[];
-  onApplyOptimization: () => void;
-  onToggleAutoPilot: (enable: boolean) => void;
+  onUpdateControl: (payload: Record<string, unknown>) => void;
   onSelectRackAnomaly: (rackId: string) => void;
 }
 
 export const OverviewOptimizePanel: React.FC<OverviewOptimizePanelProps> = ({
+  facility,
   optimization,
   anomalies,
-  onApplyOptimization,
-  onToggleAutoPilot,
+  onUpdateControl,
   onSelectRackAnomaly,
 }) => {
   const [energyState, setEnergyState] = useState<EnergyGridManagementState | null>(null);
@@ -35,6 +40,7 @@ export const OverviewOptimizePanel: React.FC<OverviewOptimizePanelProps> = ({
   const [drEvent, setDrEvent] = useState<boolean>(false);
   const [showActionsDetail, setShowActionsDetail] = useState<boolean>(false);
   const [showSchedule, setShowSchedule] = useState<boolean>(false);
+  const [trimApprovedFlash, setTrimApprovedFlash] = useState<boolean>(false);
 
   useEffect(() => {
     const loadGrid = async () => {
@@ -71,7 +77,19 @@ export const OverviewOptimizePanel: React.FC<OverviewOptimizePanelProps> = ({
     }
   };
 
-  const isAutoPilot = optimization.auto_pilot_active;
+  const controlMode = (facility.bms_control_mode ||
+    (optimization.auto_pilot_active ? 'bounded_autotrim' : 'shadow')) as
+    | 'shadow'
+    | 'advisory'
+    | 'bounded_autotrim';
+
+  const isAutoTrim = controlMode === 'bounded_autotrim';
+
+  const handleApproveAdvisoryStep = () => {
+    onUpdateControl({ bms_control_mode: 'advisory', approve_advisory_trim: true });
+    setTrimApprovedFlash(true);
+    window.setTimeout(() => setTrimApprovedFlash(false), 2200);
+  };
 
   return (
     <div className="space-y-4">
@@ -79,7 +97,9 @@ export const OverviewOptimizePanel: React.FC<OverviewOptimizePanelProps> = ({
       {anomalies.length === 0 ? (
         <div className="flex items-center gap-2.5 bg-emerald-500/10 border border-emerald-500/25 rounded-xl px-3.5 py-2.5 text-xs text-emerald-300">
           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-          <span>All rows and cooling loops are operating within safe ASHRAE limits.</span>
+          <span>
+            All cold-aisle demarcation inlets and manifold loops are within ASHRAE SLA limits.
+          </span>
         </div>
       ) : (
         <div className="space-y-2">
@@ -116,50 +136,84 @@ export const OverviewOptimizePanel: React.FC<OverviewOptimizePanelProps> = ({
         </div>
       )}
 
-      {/* 2. Cooling Optimization & Closed-Loop Auto-Pilot Status */}
+      {/* 2. 3-Stage Operational BMS Supervisory Control Posture */}
       <div
         className={`rounded-xl p-4 space-y-3.5 border transition-colors ${
-          isAutoPilot
+          isAutoTrim
             ? 'bg-emerald-950/20 border-emerald-500/35'
+            : controlMode === 'advisory'
+            ? 'bg-sky-950/20 border-sky-500/35'
             : 'bg-slate-900/60 border-slate-800'
         }`}
       >
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-start gap-2">
-            <Sparkles
-              className={`w-4 h-4 mt-0.5 shrink-0 ${
-                isAutoPilot ? 'text-emerald-400' : 'text-sky-400'
-              }`}
-            />
+            {isAutoTrim ? (
+              <ShieldCheck className="w-4 h-4 mt-0.5 shrink-0 text-emerald-400" />
+            ) : controlMode === 'advisory' ? (
+              <Sparkles className="w-4 h-4 mt-0.5 shrink-0 text-sky-400" />
+            ) : (
+              <Eye className="w-4 h-4 mt-0.5 shrink-0 text-slate-400" />
+            )}
             <div>
-              <h3 className="text-sm font-semibold text-white">
-                {isAutoPilot ? 'Auto-Pilot Active' : 'Cooling Optimization'}
-              </h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">
-                {isAutoPilot
-                  ? 'Automatically adjusting fans, pumps, and supply temperatures to match live rack heat.'
-                  : 'Manual Mode — cooling units are running fixed default setpoints.'}
+              <h3 className="text-sm font-semibold text-white">BMS Supervisory Control Posture</h3>
+              <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
+                {controlMode === 'shadow' &&
+                  'Shadow Mode (Read-Only) — verifies cooling kW savings continuously with zero BACnet writes.'}
+                {controlMode === 'advisory' &&
+                  'Advisory Mode — stages bounded setpoint trims for shift engineer sign-off before writing.'}
+                {controlMode === 'bounded_autotrim' &&
+                  'Bounded Auto-Trim — BACnet Priority 8 active inside ±2.0°C & ≥35% VFD PLC guardbands.'}
               </p>
             </div>
           </div>
           <span
             className={`text-xs font-semibold tabular-nums px-2.5 py-0.5 rounded-full shrink-0 ${
-              isAutoPilot
+              isAutoTrim
                 ? 'bg-emerald-500/20 text-emerald-300'
                 : 'bg-sky-500/15 text-sky-300'
             }`}
           >
-            {isAutoPilot
+            {isAutoTrim
               ? `Saving ${optimization.power_saved_kw.toFixed(0)} kW`
-              : `Save ${optimization.power_saved_kw.toFixed(0)} kW`}
+              : `Potential ${optimization.power_saved_kw.toFixed(0)} kW`}
           </span>
+        </div>
+
+        {/* 3-Stage Segmented Control */}
+        <div className="grid grid-cols-3 gap-1 bg-slate-950/80 border border-slate-800 rounded-lg p-1 text-xs">
+          {(
+            [
+              ['shadow', '1. Shadow'],
+              ['advisory', '2. Advisory'],
+              ['bounded_autotrim', '3. Auto-Trim'],
+            ] as const
+          ).map(([modeKey, label]) => {
+            const active = controlMode === modeKey;
+            return (
+              <button
+                key={modeKey}
+                type="button"
+                onClick={() => onUpdateControl({ bms_control_mode: modeKey })}
+                className={`py-1.5 px-2 rounded-md font-medium transition-colors ${
+                  active
+                    ? modeKey === 'bounded_autotrim'
+                      ? 'bg-emerald-500 text-slate-950 font-semibold'
+                      : 'bg-sky-500 text-slate-950 font-semibold'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-900'
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>
 
         <div className="grid grid-cols-3 gap-2.5 tabular-nums">
           <div className="bg-slate-950/70 border border-slate-800/80 rounded-lg p-2.5">
-            <div className="text-[11px] text-slate-400">{isAutoPilot ? 'Active PUE' : 'PUE'}</div>
+            <div className="text-[11px] text-slate-400">{isAutoTrim ? 'Active PUE' : 'PUE'}</div>
             <div className="text-sm font-semibold text-white mt-0.5">
-              {isAutoPilot ? (
+              {isAutoTrim ? (
                 <span className="text-emerald-400">{optimization.current_pue.toFixed(2)}</span>
               ) : (
                 <>
@@ -173,34 +227,55 @@ export const OverviewOptimizePanel: React.FC<OverviewOptimizePanelProps> = ({
           </div>
           <div className="bg-slate-950/70 border border-slate-800/80 rounded-lg p-2.5">
             <div className="text-[11px] text-slate-400">
-              {isAutoPilot ? 'Run-Rate Saved' : 'Est. Savings'}
+              {isAutoTrim ? 'Run-Rate Saved' : 'Shadow Verified'}
             </div>
             <div className="text-sm font-semibold text-sky-400 mt-0.5">
               ${optimization.annual_cost_savings_usd.toLocaleString()}/yr
             </div>
           </div>
           <div className="bg-slate-950/70 border border-slate-800/80 rounded-lg p-2.5">
-            <div className="text-[11px] text-slate-400">Safety Margin</div>
+            <div className="text-[11px] text-slate-400">SLA Headroom</div>
             <div className="text-sm font-semibold text-emerald-400 mt-0.5">
               +{optimization.thermal_safety_margin_c.toFixed(1)}°C
             </div>
           </div>
         </div>
 
-        {isAutoPilot ? (
+        {controlMode === 'shadow' && (
           <button
-            onClick={() => onToggleAutoPilot(false)}
+            type="button"
+            onClick={() => onUpdateControl({ bms_control_mode: 'advisory' })}
+            className="w-full py-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-sky-300 font-medium text-xs transition-colors"
+          >
+            Promote to Stage 2: Operator-Approved Advisory Trim →
+          </button>
+        )}
+
+        {controlMode === 'advisory' && (
+          <button
+            type="button"
+            onClick={handleApproveAdvisoryStep}
+            className="w-full py-2.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors"
+          >
+            {trimApprovedFlash ? (
+              <>
+                <Check className="w-3.5 h-3.5" />
+                <span>Single Bounded Trim Step Dispatched to BACnet Priority 8</span>
+              </>
+            ) : (
+              <span>Approve &amp; Stage Single Trim (+1.0°C Supply / -6% VFD)</span>
+            )}
+          </button>
+        )}
+
+        {controlMode === 'bounded_autotrim' && (
+          <button
+            type="button"
+            onClick={() => onUpdateControl({ bms_control_mode: 'shadow' })}
             className="w-full py-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 font-medium text-xs flex items-center justify-center gap-1.5 transition-colors"
           >
             <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
-            <span>Switch to Manual Mode (Fixed Setpoints)</span>
-          </button>
-        ) : (
-          <button
-            onClick={onApplyOptimization}
-            className="w-full py-2.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 font-semibold text-xs transition-colors"
-          >
-            Enable Auto-Pilot & Apply Setpoints ({optimization.actions.length})
+            <span>Relinquish Priority 8 to Local BMS (Return to Shadow)</span>
           </button>
         )}
 
@@ -211,9 +286,9 @@ export const OverviewOptimizePanel: React.FC<OverviewOptimizePanelProps> = ({
               className="w-full flex items-center justify-between text-xs text-slate-400 hover:text-slate-200 pt-0.5"
             >
               <span>
-                {isAutoPilot
-                  ? `View ${optimization.actions.length} active Auto-Pilot adjustments`
-                  : `View ${optimization.actions.length} proposed setpoint adjustments`}
+                {isAutoTrim
+                  ? `View ${optimization.actions.length} active BACnet Priority 8 trims`
+                  : `View ${optimization.actions.length} shadow-verified setpoint recommendations`}
               </span>
               {showActionsDetail ? (
                 <ChevronUp className="w-3.5 h-3.5" />
@@ -248,14 +323,53 @@ export const OverviewOptimizePanel: React.FC<OverviewOptimizePanelProps> = ({
         )}
       </div>
 
-      {/* 3. Utility Rate & UPS Battery Peak Shaving */}
+      {/* 3. Central Chiller & Heat-Rejection Plant (Upstream Thermal Coupling) */}
+      <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Gauge className="w-4 h-4 text-sky-400" />
+            <div>
+              <h3 className="text-sm font-semibold text-white">Central Chiller &amp; Economiser Plant</h3>
+              <div className="text-[11px] text-slate-400 tabular-nums">
+                {facility.outdoor_wetbulb_c.toFixed(1)}°C Wet-Bulb · ~14 min CHW loop thermal lag
+              </div>
+            </div>
+          </div>
+          <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-950 border border-slate-800 text-emerald-400 font-medium tabular-nums">
+            COP {(facility.chiller_cop ?? 4.6).toFixed(1)}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2 tabular-nums text-xs">
+          <div className="bg-slate-950/65 border border-slate-800/80 rounded-lg p-2.5">
+            <div className="text-[11px] text-slate-400">Free-Cooling</div>
+            <div className="text-sm font-semibold text-emerald-400 mt-0.5">
+              {(facility.economizer_share_pct ?? 42).toFixed(0)}%
+            </div>
+          </div>
+          <div className="bg-slate-950/65 border border-slate-800/80 rounded-lg p-2.5">
+            <div className="text-[11px] text-slate-400">Condenser Wtr</div>
+            <div className="text-sm font-semibold text-white mt-0.5">
+              {(facility.condenser_supply_temp_c ?? 24.2).toFixed(1)}°C
+            </div>
+          </div>
+          <div className="bg-slate-950/65 border border-slate-800/80 rounded-lg p-2.5">
+            <div className="text-[11px] text-slate-400">Liquid Share</div>
+            <div className="text-sm font-semibold text-sky-400 mt-0.5">
+              {facility.liquid_cooling_share_pct.toFixed(0)}% DLC
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 4. Utility Rate & UPS Battery Peak Shaving */}
       {energyState && (
         <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 space-y-3.5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <BatteryCharging className="w-4 h-4 text-emerald-400" />
               <div>
-                <h3 className="text-sm font-semibold text-white">Grid & Peak Shaving</h3>
+                <h3 className="text-sm font-semibold text-white">Grid &amp; Peak Shaving</h3>
                 <div className="text-[11px] text-slate-400 tabular-nums">
                   {energyState.current_tariff_tier.replace(/_/g, ' ')} · $
                   {energyState.current_price_usd_per_kwh.toFixed(3)}/kWh
@@ -323,7 +437,7 @@ export const OverviewOptimizePanel: React.FC<OverviewOptimizePanelProps> = ({
             onClick={() => setShowSchedule(!showSchedule)}
             className="w-full flex items-center justify-between text-xs text-slate-400 hover:text-slate-200"
           >
-            <span>Power breakdown & 24h tariff schedule</span>
+            <span>Power breakdown &amp; 24h tariff schedule</span>
             {showSchedule ? (
               <ChevronUp className="w-3.5 h-3.5" />
             ) : (

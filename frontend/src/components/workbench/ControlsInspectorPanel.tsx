@@ -66,33 +66,43 @@ export const ControlsInspectorPanel: React.FC<ControlsInspectorPanelProps> = ({
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-[11px] text-slate-400">
-                  {selectedRack.row_id} ·{' '}
-                  {selectedRack.cooling_type === 'hybrid_liquid' ? 'Liquid Cooled' : 'Air Cooled'}
+                  {selectedRack.cage_id || selectedRack.row_id} · Whip{' '}
+                  <strong className="text-sky-400">{selectedRack.whip_phase || 'L1-L2'}</strong> ·{' '}
+                  {selectedRack.cooling_type === 'hybrid_liquid' ? 'Liquid DLC' : 'Perimeter Air'}
                 </div>
                 <h3 className="text-sm font-semibold text-white mt-0.5">{selectedRack.name}</h3>
               </div>
               <span
-                className={`text-[11px] px-2.5 py-0.5 rounded-full font-medium capitalize ${
-                  selectedRack.status === 'critical'
-                    ? 'bg-red-500/15 text-red-300'
-                    : selectedRack.status === 'warning'
+                className={`text-[11px] px-2.5 py-0.5 rounded-full font-medium ${
+                  selectedRack.occupancy_status === 'dark_spare'
+                    ? 'bg-slate-800 text-slate-300'
+                    : selectedRack.occupancy_status === 'ghost_reservation'
                     ? 'bg-amber-500/15 text-amber-300'
+                    : selectedRack.status === 'critical'
+                    ? 'bg-red-500/15 text-red-300'
                     : 'bg-emerald-500/15 text-emerald-300'
                 }`}
               >
-                {selectedRack.status}
+                {selectedRack.occupancy_status === 'dark_spare'
+                  ? 'Dark Spare'
+                  : selectedRack.occupancy_status === 'ghost_reservation'
+                  ? 'Ghost Allocation'
+                  : selectedRack.status}
               </span>
             </div>
 
             <div className="grid grid-cols-3 gap-2 tabular-nums">
               <div className="bg-slate-950/70 border border-slate-800/80 rounded-lg p-2.5">
-                <div className="text-[11px] text-slate-400">Rack Power</div>
+                <div className="text-[11px] text-slate-400">Metered / SLA</div>
                 <div className="text-sm font-semibold text-white mt-0.5">
-                  {selectedRack.power_kw.toFixed(1)} kW
+                  {selectedRack.power_kw.toFixed(1)}
+                  <span className="text-xs font-normal text-slate-400">
+                    /{(selectedRack.contracted_power_kw ?? selectedRack.max_power_kw).toFixed(0)} kW
+                  </span>
                 </div>
               </div>
               <div className="bg-slate-950/70 border border-slate-800/80 rounded-lg p-2.5">
-                <div className="text-[11px] text-slate-400">Cold Inlet</div>
+                <div className="text-[11px] text-slate-400">Cold Intake</div>
                 <div
                   className={`text-sm font-semibold mt-0.5 ${
                     selectedRack.inlet_temp_c >= 27 ? 'text-amber-400' : 'text-emerald-400'
@@ -102,9 +112,11 @@ export const ControlsInspectorPanel: React.FC<ControlsInspectorPanelProps> = ({
                 </div>
               </div>
               <div className="bg-slate-950/70 border border-slate-800/80 rounded-lg p-2.5">
-                <div className="text-[11px] text-slate-400">15m Forecast</div>
+                <div className="text-[11px] text-slate-400">
+                  {selectedRack.coolant_return_temp_c ? 'Manifold Ret' : 'Exhaust Air'}
+                </div>
                 <div className="text-sm font-semibold text-sky-400 mt-0.5">
-                  {selectedRack.predicted_inlet_15m_c.toFixed(1)}°C
+                  {(selectedRack.coolant_return_temp_c ?? selectedRack.outlet_temp_c).toFixed(1)}°C
                 </div>
               </div>
             </div>

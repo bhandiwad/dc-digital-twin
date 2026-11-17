@@ -36,6 +36,10 @@ export interface RackTelemetry {
   anomaly_score: number;
   predicted_inlet_15m_c: number;
   predicted_chip_15m_c: number;
+  cage_id?: string;
+  contracted_power_kw?: number;
+  whip_phase?: string;
+  occupancy_status?: 'active_colo' | 'ghost_reservation' | 'dark_spare' | string;
   status: Severity;
   active_faults: string[];
 }
@@ -125,6 +129,10 @@ export interface FacilityMetrics {
   liquid_cooling_share_pct: number;
   active_alarms_count: number;
   health_score: number;
+  chiller_cop?: number;
+  economizer_share_pct?: number;
+  condenser_supply_temp_c?: number;
+  bms_control_mode?: 'shadow' | 'advisory' | 'bounded_autotrim' | string;
 }
 
 export interface AnomalyEvent {
@@ -650,16 +658,17 @@ export interface AgentReportSection {
 
 export interface AgentWorkflowRunRequest {
   preset_id?: string;
+  raw_mop_text?: string;
   target_component_id?: string;
   window_hour_local?: number;
   forecast_wetbulb_c?: number;
   duration_minutes?: number;
-  procedure_summary?: string;
   incident_scenario_id?: string;
   sync_to_live_hall?: boolean;
   shift_window?: string;
   dataset_id?: string;
-  customer_rfp_summary?: string;
+  operator_shift_notes?: string;
+  raw_rfp_email?: string;
   requested_kw?: number;
   requested_racks?: number;
   cooling_preference?: 'liquid_dlc' | 'air_only';

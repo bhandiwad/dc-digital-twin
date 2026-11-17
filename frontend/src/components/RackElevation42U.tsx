@@ -86,7 +86,7 @@ export const RackElevation42U: React.FC<{
       <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-2 space-y-1 max-h-[290px] overflow-y-auto">
         {elevation.nodes.map((node) => {
           const isSelected = selectedNode?.node_id === node.node_id;
-          const peakT = node.gpu_max_temp_c ?? node.cpu_temp_c;
+          const returnT = node.exhaust_temp_c;
           const uEnd = node.u_start + node.u_height - 1;
 
           return (
@@ -126,14 +126,14 @@ export const RackElevation42U: React.FC<{
                 <div className="text-xs font-semibold text-slate-100">{node.power_kw.toFixed(1)} kW</div>
                 <div
                   className={`text-[11px] ${
-                    peakT >= 75
+                    returnT >= 39
                       ? 'text-red-400 font-semibold'
-                      : peakT >= 68
+                      : returnT >= 35
                       ? 'text-amber-400'
                       : 'text-emerald-400'
                   }`}
                 >
-                  {peakT.toFixed(1)}°C
+                  Ret {returnT.toFixed(1)}°C
                 </div>
               </div>
             </div>
@@ -162,15 +162,16 @@ export const RackElevation42U: React.FC<{
 
           <div className="grid grid-cols-2 gap-2 text-xs tabular-nums">
             <div className="bg-slate-950/60 border border-slate-800/80 rounded-lg px-2.5 py-2">
-              <div className="text-[11px] text-slate-400">Air Inlet → Exhaust</div>
+              <div className="text-[11px] text-slate-400">Intake → Return °C</div>
               <div className="font-semibold text-slate-100 mt-0.5">
                 {selectedNode.inlet_temp_c}°C → {selectedNode.exhaust_temp_c}°C
               </div>
             </div>
             <div className="bg-slate-950/60 border border-slate-800/80 rounded-lg px-2.5 py-2">
-              <div className="text-[11px] text-slate-400">Thermal Proxy</div>
+              <div className="text-[11px] text-slate-400">PDU Outlet Draw (240V)</div>
               <div className="font-semibold text-sky-400 mt-0.5">
-                {(selectedNode.gpu_max_temp_c ?? selectedNode.cpu_temp_c).toFixed(1)}°C
+                {((selectedNode.power_kw * 1000) / 240).toFixed(1)} A · ΔT +
+                {(selectedNode.exhaust_temp_c - selectedNode.inlet_temp_c).toFixed(1)}°C
               </div>
             </div>
           </div>

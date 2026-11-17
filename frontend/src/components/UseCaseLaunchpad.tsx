@@ -33,12 +33,12 @@ export const USE_CASE_CATALOG: UseCaseCardMeta[] = [
     id: 'twin_3d',
     shortTabLabel: '3D Digital Twin',
     numberTag: 'CORE PLATFORM',
-    category: 'Live Spatial Operations & Planning',
-    title: 'Live 3D Digital Twin & Cooling Auto-Pilot',
+    category: 'Live Spatial Operations & BMS Supervisory Control',
+    title: 'Live 3D Colocation Twin & Staged BMS Control',
     description:
-      'Interactive 32-rack hybrid air + liquid data hall with 1-click Auto-Pilot cooling optimization, 42U rack inspection, 10,000-GPU cluster planning, 24h DVR replay, and inline ROI.',
-    toolChain: 'WebGL 3D Floor → SciPy MPC → 10k-GPU Planner → 24h DuckDB',
-    outcomeMetric: 'PUE 1.33 → 1.26 · Zero Tenant Agents',
+      'Interactive 32-bay hybrid air + liquid hall with colocation cages, ghost reservations, dark spare bays, central chiller COP/economiser coupling, 42U smart-PDU & manifold inspection, and Shadow → Advisory → Bounded ±2°C Auto-Trim.',
+    toolChain: 'WebGL 3D Floor → Chiller + CDU Physics → 10k-GPU Planner → 24h DuckDB',
+    outcomeMetric: 'Shadow → Advisory → Bounded Trim · Zero Server Agents',
     icon: Box,
     accentClass: 'text-sky-400 bg-sky-500/10 border-sky-500/25',
   },
@@ -46,12 +46,12 @@ export const USE_CASE_CATALOG: UseCaseCardMeta[] = [
     id: 'redteam_change',
     shortTabLabel: '01 · Change Red-Team',
     numberTag: 'AGENT 01',
-    category: 'Maintenance & Reliability',
-    title: 'Change-Window & MOP "Red-Team" Agent',
+    category: 'Maintenance & CAB Governance',
+    title: 'Change-Window & Raw MOP "Red-Team" Agent',
     description:
-      'Audits planned maintenance tickets against live N+1 redundancy, open floor faults, and 48-hour wet-bulb weather forecasts to block hidden single points of failure before LOTO.',
-    toolChain: 'GraphRAG Blast Radius → Peer Check → N-1 Weather Sim → CAB Verdict',
-    outcomeMetric: 'Prevents Planned-Work SLA Outages',
+      'Parses unstructured ServiceNow tickets & vendor MOP drafts, auto-pulls diurnal site wet-bulb weather, simulates N-1 demarcation temperatures, and flags missing MOP safety clauses.',
+    toolChain: 'MOP NLP Parser → Weather API → N-1 Demarcation Sim → CAB Redlines',
+    outcomeMetric: 'Catches MOP Gaps & Afternoon N-1 Traps',
     icon: ShieldAlert,
     accentClass: 'text-amber-400 bg-amber-500/10 border-amber-500/25',
   },
@@ -62,9 +62,9 @@ export const USE_CASE_CATALOG: UseCaseCardMeta[] = [
     category: 'NOC War-Room Triage',
     title: '5-Minute Incident Commander & Auto-RCA',
     description:
-      'Collapses cascading rack temperature alarms into 1 upstream mechanical root cause, calculates seconds-to-SLA-breach, verifies EOP failover, and drafts the post-incident RCA.',
-    toolChain: 'Alarm Dedup → Thermal Runway → EOP Sim → Auto-RCA & Tenant Notice',
-    outcomeMetric: '16:1 Alarm Compression · <5s Triage',
+      'Compresses multi-cage cold-aisle & differential-pressure alarms into 1 upstream mechanical root cause, calculates SLA thermal ride-through, stages EOP trims, and drafts tenant SLA advisories.',
+    toolChain: 'Alarm Dedup → Ride-Through Math → EOP Sim → Colocation SLA RCA',
+    outcomeMetric: 'Multi-Cage Alarm Dedup · Facility Boundary Only',
     icon: Flame,
     accentClass: 'text-rose-400 bg-rose-500/10 border-rose-500/25',
   },
@@ -72,12 +72,12 @@ export const USE_CASE_CATALOG: UseCaseCardMeta[] = [
     id: 'shift_handover',
     shortTabLabel: '03 · Shift & Silent Drift',
     numberTag: 'AGENT 03',
-    category: 'Daily NOC Intelligence',
-    title: 'Silent-Drift & Shift-Handover Investigator',
+    category: 'Daily NOC & Sensor Hygiene',
+    title: 'Silent-Drift, Sensor Hygiene & Shift Handover',
     description:
-      'Scans 12–24 hours of DuckDB sub-meter history to catch hunting valves, strainer ΔP creep, and 3-phase neutral current sitting below static BMS alarms—compiled into a 1-page shift brief.',
-    toolChain: 'DuckDB 12h SQL → 3-Phase & ΔP Drift Scan → Walkdown Brief',
-    outcomeMetric: 'Catches Micro-Drift Days Early',
+      'Audits 12h DuckDB sub-meter logs + outgoing operator notes to quarantine flatlined BMS probes (SAT-B04), catch chilled-water valve stiction, and compile the incoming walkdown brief.',
+    toolChain: 'DuckDB 12h SQL → Sensor & Valve Hygiene → Shift Walkdown Packet',
+    outcomeMetric: 'Quarantines Stuck Probes & Hunting Valves',
     icon: ClipboardCheck,
     accentClass: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/25',
   },
@@ -85,12 +85,12 @@ export const USE_CASE_CATALOG: UseCaseCardMeta[] = [
     id: 'colo_deal_desk',
     shortTabLabel: '04 · Colo Deal-Desk',
     numberTag: 'AGENT 04',
-    category: 'Commercial Quote-to-Rack',
-    title: 'Colocation Deal-Desk & RFP Fit-Out Agent',
+    category: 'Commercial Quote-to-Cage',
+    title: 'Colocation Deal-Desk & Broker RFP Agent',
     description:
-      'Qualifies incoming customer capacity RFPs in seconds—checking live row PDU spare kW, liquid CDU headroom, summer wet-bulb PUE, CapEx deltas, and drafting the technical proposal.',
-    toolChain: 'RFP Parser → Hall Headroom Audit → Summer PUE Sim → Quote Packet',
-    outcomeMetric: '5–10 Day Sales Cycle → 60 Seconds',
+      'Parses raw inbound broker/customer RFP emails, checks dark spare bays, row PDU NEC kW & liquid CDU headroom, flags missing customer specs, and drafts an engineering-gated quote.',
+    toolChain: 'Broker Email Parser → Spare Bay & PDU Audit → Summer PUE Quote',
+    outcomeMetric: 'Parses Raw RFP Emails + Flags Missing Specs',
     icon: Briefcase,
     accentClass: 'text-indigo-400 bg-indigo-500/10 border-indigo-500/25',
   },
@@ -98,12 +98,12 @@ export const USE_CASE_CATALOG: UseCaseCardMeta[] = [
     id: 'stranded_power',
     shortTabLabel: '05 · Stranded Power',
     numberTag: 'AGENT 05',
-    category: 'Capacity Monetization',
-    title: 'Stranded Power & Ghost-Capacity Recovery',
+    category: 'Bottom-Up Capacity Monetization',
+    title: 'Stranded Power & Bottom-Up Whip Recovery',
     description:
-      'Audits L1/L2/L3 3-phase breaker skew and compares contracted rack reservations against p99 metered draw to unlock trapped sellable kW without waiting for a new utility feed.',
-    toolChain: '120° Phasor Audit → p99 Ghost-Load Scan → Whip Swap & ARR Plan',
-    outcomeMetric: '+15–25% Sellable kW Unlocked',
+      'Sums real L1-L2 / L2-L3 / L3-L1 rack whips into 120° phasor amps, flags under-drawn ghost-reservation cages, and executes live rack whip phase rebalancing.',
+    toolChain: 'Bottom-Up L1/L2/L3 Whip Phasors → Ghost Cage Scan → Live Rebalance',
+    outcomeMetric: 'Live Rack Whip Balancing & Ghost-kW Audit',
     icon: Zap,
     accentClass: 'text-violet-400 bg-violet-500/10 border-violet-500/25',
   },
@@ -123,8 +123,9 @@ export const UseCaseLaunchpad: React.FC<UseCaseLaunchpadProps> = ({
   const { facility, optimization, anomalies } = snapshot;
   const heroTwin = USE_CASE_CATALOG[0];
   const agentCards = USE_CASE_CATALOG.slice(1);
-  const airRacks = snapshot.racks.filter((r) => r.cooling_type === 'air').length;
-  const liquidRacks = snapshot.racks.filter((r) => r.cooling_type === 'hybrid_liquid').length;
+  const darkSpares = snapshot.racks.filter((r) => r.occupancy_status === 'dark_spare').length;
+  const ghostBays = snapshot.racks.filter((r) => r.occupancy_status === 'ghost_reservation').length;
+  const activeRacks = snapshot.racks.length - darkSpares;
 
   const isTabOpen = (id: WorkspaceTabId) => openTabs.includes(id);
 
@@ -136,31 +137,31 @@ export const UseCaseLaunchpad: React.FC<UseCaseLaunchpadProps> = ({
           <div className="space-y-2 max-w-2xl">
             <div className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-sky-400">
               <Cpu className="w-3.5 h-3.5" />
-              <span>100% Facility-Side Operations &amp; Agentic AI Suite</span>
+              <span>100% Facility-Demarcation Digital Twin &amp; Agentic Operations</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
               Select a Data Centre Use Case to Launch
             </h1>
             <p className="text-sm text-slate-400 leading-relaxed">
-              Click any workspace below to open it in a dedicated tab above. The 3D Digital Twin and
-              all five autonomous agents run against the same live facility meters, topology graph,
-              and 24-hour historian—with zero software on tenant servers.
+              Click any workspace below to open it in a dedicated tab above. Every workflow operates
+              strictly on facility demarcation telemetry (cold-aisle inlets, liquid manifolds,
+              smart-PDU L1/L2/L3 whips, and central chillers)—zero agents on customer servers.
             </p>
           </div>
 
           {/* Live Hall Pulse Strip */}
           <div className="grid grid-cols-3 gap-2.5 shrink-0 tabular-nums">
             <div className="bg-slate-900/70 border border-slate-800 rounded-xl px-3.5 py-2.5">
-              <div className="text-[11px] text-slate-400">Active Hall</div>
+              <div className="text-[11px] text-slate-400">Hall Occupancy</div>
               <div className="text-sm font-semibold text-white mt-0.5">
-                {snapshot.racks.length} Racks
+                {activeRacks}/{snapshot.racks.length} Live Bays
               </div>
               <div className="text-[11px] text-slate-500">
-                {airRacks} Air · {liquidRacks} Liquid
+                {ghostBays} Ghost · {darkSpares} Dark Spare
               </div>
             </div>
             <div className="bg-slate-900/70 border border-slate-800 rounded-xl px-3.5 py-2.5">
-              <div className="text-[11px] text-slate-400">Live PUE</div>
+              <div className="text-[11px] text-slate-400">Live PUE · Plant COP</div>
               <div className="text-sm font-semibold text-white mt-0.5">
                 {facility.pue.toFixed(2)}
                 {!optimization.auto_pilot_active && (
@@ -170,11 +171,12 @@ export const UseCaseLaunchpad: React.FC<UseCaseLaunchpadProps> = ({
                 )}
               </div>
               <div className="text-[11px] text-slate-500">
-                {facility.total_facility_power_kw.toFixed(0)} kW Total
+                COP {(facility.chiller_cop ?? 4.6).toFixed(1)} ·{' '}
+                {(facility.economizer_share_pct ?? 42).toFixed(0)}% Econ
               </div>
             </div>
             <div className="bg-slate-900/70 border border-slate-800 rounded-xl px-3.5 py-2.5">
-              <div className="text-[11px] text-slate-400">Floor Health</div>
+              <div className="text-[11px] text-slate-400">Demarcation SLA</div>
               <div
                 className={`text-sm font-semibold mt-0.5 ${
                   anomalies.length > 0 ? 'text-amber-400' : 'text-emerald-400'
@@ -183,7 +185,7 @@ export const UseCaseLaunchpad: React.FC<UseCaseLaunchpadProps> = ({
                 {anomalies.length > 0 ? `${anomalies.length} Alerts` : 'Nominal'}
               </div>
               <div className="text-[11px] text-slate-500">
-                Peak {facility.max_inlet_temp_c.toFixed(1)}°C
+                Inlet {facility.max_inlet_temp_c.toFixed(1)}°C (≤27°C)
               </div>
             </div>
           </div>
@@ -219,10 +221,10 @@ export const UseCaseLaunchpad: React.FC<UseCaseLaunchpadProps> = ({
 
               <div className="flex flex-wrap items-center gap-2 pt-1">
                 {[
-                  '3D Spatial Floor & 42U Rack View',
-                  'Auto-Pilot & Peak-Tariff Shaving',
-                  '10,000-GPU Cluster Scale-Out Planner',
-                  'Predictive Fouling & 24h DVR Replay',
+                  '3D Colocation Cages & 42U PDU Outlets',
+                  'Shadow → Advisory → Bounded Auto-Trim',
+                  'Central Chiller COP & 10k-GPU Planner',
+                  '24h DuckDB Replay & Sensor Hygiene',
                 ].map((pill) => (
                   <span
                     key={pill}
@@ -237,12 +239,12 @@ export const UseCaseLaunchpad: React.FC<UseCaseLaunchpadProps> = ({
             <div className="flex lg:flex-col items-center lg:items-end justify-between gap-3 shrink-0">
               <div className="text-right hidden lg:block">
                 <div className="text-[11px] uppercase tracking-wider text-slate-400">
-                  Live Potential
+                  BMS Posture: {(facility.bms_control_mode || 'shadow').replace('_', ' ')}
                 </div>
                 <div className="text-base font-semibold text-emerald-400 tabular-nums mt-0.5">
                   {optimization.auto_pilot_active
                     ? `Saving ${optimization.power_saved_kw.toFixed(0)} kW Active`
-                    : `Save ${optimization.power_saved_kw.toFixed(0)} kW ($${Math.round(
+                    : `${optimization.power_saved_kw.toFixed(0)} kW Shadow Verified ($${Math.round(
                         optimization.annual_cost_savings_usd / 1000
                       )}k/yr)`}
                 </div>
@@ -262,11 +264,11 @@ export const UseCaseLaunchpad: React.FC<UseCaseLaunchpadProps> = ({
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-sky-400" />
               <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-300">
-                Autonomous Facility &amp; Commercial Agent Workflows (5)
+                Autonomous Facility &amp; Colocation Agent Workflows (5)
               </h2>
             </div>
             <span className="text-xs text-slate-400 hidden sm:inline">
-              Multi-tool reasoning grounded in physics, GraphRAG &amp; DuckDB SQL
+              Parses raw MOPs, broker RFPs &amp; shift logs against live facility physics
             </span>
           </div>
 
@@ -333,11 +335,11 @@ export const UseCaseLaunchpad: React.FC<UseCaseLaunchpadProps> = ({
           <div className="flex items-center gap-2">
             <Clock className="w-3.5 h-3.5 text-slate-500" />
             <span>
-              All workflows execute live against the shared facility digital twin &amp; 24h DuckDB
-              historian
+              100% Colocation Demarcation Safe · BACnet Priority 8 with Instant Priority 16 Local
+              BMS Relinquish
             </span>
           </div>
-          <span>BACnet / Modbus / SNMP / CSV · Instant Local BMS Fallback</span>
+          <span>BACnet/IP · Modbus TCP · Smart-PDU SNMP · DuckDB Historian</span>
         </div>
       </div>
     </div>

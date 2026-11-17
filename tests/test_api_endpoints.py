@@ -214,3 +214,99 @@ def test_five_agentic_workflows_endpoints(api_client):
     assert r_strand.json()["verdict_status"] == "opportunity"
 
 
+def test_field_realism_upgrades(api_client):
+    # 1. Colocation demarcation, patchy occupancy & central chiller plant
+    snap = api_client.get("/api/state").json()
+    assert snap["facility"]["chiller_cop"] > 1.5
+    assert "economizer_share_pct" in snap["facility"]
+    occupancy_types = {r["occupancy_status"] for r in snap["racks"]}
+    assert "active_colo" in occupancy_types
+    assert "ghost_reservation" in occupancy_types
+    assert "dark_spare" in occupancy_types
+    whip_phases = {r["whip_phase"] for r in snap["racks"]}
+    assert whip_phases.issubset({"L1-L2", "L2-L3", "L3-L1"})
+
+    # 2. Raw MOP ticket NLP parser + missing MOP safety clause critique
+    r_mop_raw = api_client.post(
+        "/api/agents/redteam_change/run",
+        json={
+            "raw_mop_text": (
+                "CHG0049182 — Mechanical vendor isolating CDU-1 primary basket strainer "
+                "at 15:00 for 45 mins to flush debris screen."
+            )
+        },
+    )
+    assert r_mop_raw.status_code == 200
+    mop_res = r_mop_raw.json()
+    assert mop_res["focus_asset_id"] == "CDU-1"
+    assert mop_res["verdict_status"] == "blocked"
+    redlines = mop_res["sections"][0]["checklist"]
+    assert any(item["priority"] == "MOP GAP" for item in redlines)
+
+    # 3. Raw Broker RFP email parser + pre-quote engineering questions
+    r_rfp_raw = api_client.post(
+        "/api/agents/colo_deal_desk/run",
+        json={
+            "raw_rfp_email": (
+                "Hi Team — AI prospect seeking 850 kW across 10 direct-to-chip liquid racks "
+                "with summer PUE <= 1.28."
+            )
+        },
+    )
+    assert r_rfp_raw.status_code == 200
+    rfp_res = r_rfp_raw.json()
+    assert "850 kW" in rfp_res["title"]
+    assert any(
+        any(item["priority"] == "ASK PROSPECT" for item in sec["checklist"])
+        for sec in rfp_res["sections"]
+        if sec["kind"] == "checklist"
+    )
+
+    # 4. Shift Handover sensor hygiene (quarantines flatlined probe SAT-B04)
+    r_shift_notes = api_client.post(
+        "/api/agents/shift_handover/run",
+        json={
+            "shift_window": "day_to_night",
+            "operator_shift_notes": "16:20 walkdown: SAT-B04 unchanged since noon.",
+        },
+    )
+    assert r_shift_notes.status_code == 200
+    assert "SAT-B04" in str(r_shift_notes.json()["sections"])
+
+    # 5. 3-Stage BMS Supervisory Control Posture (Shadow -> Advisory -> Bounded Auto-Trim)
+    s_shadow = api_client.post("/api/controls", json={"bms_control_mode": "shadow"}).json()
+    assert s_shadow["facility"]["bms_control_mode"] == "shadow"
+    assert s_shadow["optimization"]["auto_pilot_active"] is False
+
+    s_adv = api_client.post(
+        "/api/controls",
+        json={"bms_control_mode": "advisory", "approve_advisory_trim": True},
+    ).json()
+    assert s_adv["facility"]["bms_control_mode"] == "advisory"
+    assert s_adv["facility"]["pue"] <= s_shadow["facility"]["pue"]
+
+    s_auto = api_client.post("/api/controls", json={"bms_control_mode": "bounded_autotrim"}).json()
+    assert s_auto["facility"]["bms_control_mode"] == "bounded_autotrim"
+    assert s_auto["optimization"]["auto_pilot_active"] is True
+
+    api_client.post("/api/controls", json={"bms_control_mode": "shadow"})
+
+    # 6. Bottom-up rack whip phase rebalance measurably drops whip-trapped kW
+    before_strand = api_client.post(
+        "/api/agents/stranded_power/run",
+        json={"audit_scope": "full_hall", "breaker_limit_pct": 80.0},
+    ).json()
+    before_whip_kw = float(before_strand["kpis"][0]["value"].replace("+", "").replace(" kW", ""))
+    assert before_whip_kw > 0
+
+    api_client.post("/api/controls", json={"rebalance_pdu_whips": True})
+
+    after_strand = api_client.post(
+        "/api/agents/stranded_power/run",
+        json={"audit_scope": "full_hall", "breaker_limit_pct": 80.0},
+    ).json()
+    after_whip_kw = float(after_strand["kpis"][0]["value"].replace("+", "").replace(" kW", ""))
+    assert after_whip_kw < before_whip_kw
+
+
+

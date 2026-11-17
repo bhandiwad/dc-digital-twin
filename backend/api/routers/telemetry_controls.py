@@ -58,9 +58,41 @@ def trigger_scenario(req: ScenarioTriggerRequest) -> TwinStateSnapshot:
 @router.post("/api/controls", response_model=TwinStateSnapshot)
 def update_controls(req: ControlSetpointRequest) -> TwinStateSnapshot:
     eng = runtime.twin_engine
+
+    if req.bms_control_mode in ("shadow", "advisory", "bounded_autotrim"):
+        eng.bms_control_mode = req.bms_control_mode
+        if req.bms_control_mode == "bounded_autotrim":
+            req.auto_optimize = True
+        elif req.bms_control_mode == "shadow":
+            req.auto_optimize = False
+        else:
+            # Advisory mode: hold current setpoints without continuous closed-loop override
+            eng.auto_optimize = False
+
+    if req.approve_advisory_trim:
+        eng.bms_control_mode = "advisory"
+        eng.auto_optimize = False
+        for cid, crac in eng.cracs.items():
+            if crac.enabled:
+                next_sp = min(20.5, round(crac.supply_air_setpoint_c + 1.0, 1))
+                crac.fan_speed_pct = max(62.0, round(crac.fan_speed_pct - 6.0, 1))
+                runtime.telemetry_adapter.write_setpoint(cid, "supply_air_setpoint_c", next_sp)
+        for cdu_id, cdu in eng.cdus.items():
+            if cdu.enabled:
+                next_sp = min(25.2, round(cdu.supply_temp_setpoint_c + 0.8, 1))
+                cdu.pump_speed_pct = max(66.0, round(cdu.pump_speed_pct - 5.0, 1))
+                runtime.telemetry_adapter.write_setpoint(cdu_id, "supply_temp_setpoint_c", next_sp)
+        for _ in range(5):
+            eng.step(dt_sec=2.5)
+
+    if req.rebalance_pdu_whips:
+        eng.rebalance_pdu_whips()
+        eng.step(dt_sec=2.0)
+
     if req.auto_optimize is not None:
         eng.auto_optimize = req.auto_optimize
         if req.auto_optimize:
+            eng.bms_control_mode = "bounded_autotrim"
             # Closed-loop BACnet Priority 8 active: converge supervisory setpoints immediately
             for _ in range(7):
                 eng.step(dt_sec=2.5)
@@ -73,6 +105,8 @@ def update_controls(req: ControlSetpointRequest) -> TwinStateSnapshot:
                     cdu_id, "supply_temp_setpoint_c", cdu.supply_temp_setpoint_c
                 )
         else:
+            if req.bms_control_mode != "advisory":
+                eng.bms_control_mode = "shadow"
             # Relinquish BACnet Priority 8 -> NULL so local Priority 16 conservative BMS setpoints resume
             for cid in eng.cracs:
                 runtime.telemetry_adapter.relinquish_setpoint(cid, "supply_air_setpoint_c")

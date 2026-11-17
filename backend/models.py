@@ -80,6 +80,15 @@ class RackTelemetry(BaseModel):
     fan_power_kw: float = Field(description="Server internal fan power in kW")
     thermal_margin_c: float = Field(description="Degrees below throttling threshold (85°C chip / 32°C inlet)")
 
+    # Colocation demarcation & electrical wiring metadata
+    cage_id: str = Field(default="CAGE-01", description="Tenant cage or pod identifier")
+    contracted_power_kw: float = Field(default=15.0, description="Contracted SLA breaker allocation in kW")
+    whip_phase: str = Field(default="L1-L2", description="Primary 3-phase PDU whip assignment (L1-L2, L2-L3, L3-L1)")
+    occupancy_status: str = Field(
+        default="active_colo",
+        description="active_colo | ghost_reservation | dark_spare",
+    )
+
     # AI scores per rack
     anomaly_score: float = Field(default=0.0, description="Normalized anomaly score (0.0 to 1.0)")
     predicted_inlet_15m_c: float = Field(default=22.0, description="AI 15-min ahead predicted inlet temp (°C)")
@@ -173,6 +182,13 @@ class FacilityMetrics(BaseModel):
     liquid_cooling_share_pct: float
     active_alarms_count: int
     health_score: float = Field(description="Overall data hall health score 0-100")
+    chiller_cop: float = Field(default=4.6, description="Central chiller plant effective COP")
+    economizer_share_pct: float = Field(default=34.0, description="Waterside free-cooling economizer share %")
+    condenser_supply_temp_c: float = Field(default=23.5, description="Cooling tower / dry-cooler condenser supply °C")
+    bms_control_mode: str = Field(
+        default="shadow",
+        description="shadow | advisory | bounded_autotrim",
+    )
 
 
 class AnomalyEvent(BaseModel):
@@ -290,6 +306,9 @@ class ControlSetpointRequest(BaseModel):
     cdu_enabled: Optional[bool] = None
     outdoor_wetbulb_c: Optional[float] = None
     auto_optimize: Optional[bool] = None
+    bms_control_mode: Optional[str] = None  # "shadow" | "advisory" | "bounded_autotrim"
+    approve_advisory_trim: Optional[bool] = None
+    rebalance_pdu_whips: Optional[bool] = None
 
 
 class ScenarioTriggerRequest(BaseModel):

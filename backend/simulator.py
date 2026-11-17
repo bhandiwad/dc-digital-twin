@@ -54,6 +54,7 @@ class DataHallTwinEngine:
         self.outdoor_drybulb_c: float = self.site_config.ambient_defaults.outdoor_drybulb_c
         self.hall_relative_humidity_pct: float = self.site_config.ambient_defaults.hall_relative_humidity_pct
         self.auto_optimize: bool = False
+        self.bms_control_mode: str = "shadow"
         self.active_scenarios: List[str] = ["normal"]
 
         # Dynamic scenario modifiers keyed by configured IDs (zero hardcoded row/CDU names)
@@ -158,8 +159,33 @@ class DataHallTwinEngine:
                 self.rack_specs[rack_id] = spec
 
                 is_liq = row_cfg.cooling_type == CoolingType.HYBRID_LIQUID
-                base_util = 58.0 + 14.0 * math.sin(slot * 0.6) if is_liq else 46.0 + 10.0 * math.cos(slot * 0.5)
-                init_power = row_cfg.rack_max_kw * (0.15 + 0.85 * (base_util / 100.0))
+
+                # Realistic patchy colocation cage occupancy & 3-phase whip assignments
+                if not is_liq and slot == row_cfg.rack_count and row_cfg.rack_count >= 6:
+                    occ_status = "dark_spare"
+                    cage_id = f"SPARE-{row_suffix}"
+                    contracted_kw = 0.0
+                    whip_phase = "L3-L1"
+                    base_util = 8.0
+                elif slot == max(2, row_cfg.rack_count - 1) and row_cfg.rack_count >= 4:
+                    occ_status = "ghost_reservation"
+                    cage_id = f"CAGE-{row_suffix}2"
+                    contracted_kw = round(row_cfg.rack_max_kw * 0.85, 1)
+                    whip_phase = "L3-L1"
+                    base_util = 24.0 if is_liq else 21.0
+                else:
+                    occ_status = "active_colo"
+                    cage_id = f"CAGE-{row_suffix}1"
+                    contracted_kw = round(row_cfg.rack_max_kw * 0.85, 1)
+                    # Historic ad-hoc turn-ups load L1-L2 heavier than L3-L1 until rebalanced
+                    whip_phase = "L1-L2" if slot in (1, 2, 3, 5) else "L2-L3"
+                    base_util = (
+                        72.0 + 11.0 * math.sin(slot * 0.7)
+                        if is_liq
+                        else 56.0 + 9.0 * math.cos(slot * 0.6)
+                    )
+
+                init_power = row_cfg.rack_max_kw * (0.06 + 0.88 * (base_util / 100.0))
 
                 self.racks[rack_id] = RackTelemetry(
                     rack_id=rack_id,
@@ -172,6 +198,10 @@ class DataHallTwinEngine:
                     pdu_id=row_cfg.pdu_id,
                     cdu_id=cdu_id,
                     position=pos,
+                    cage_id=cage_id,
+                    contracted_power_kw=contracted_kw,
+                    whip_phase=whip_phase,
+                    occupancy_status=occ_status,
                     it_utilization_pct=round(base_util, 1),
                     power_kw=round(init_power, 2),
                     air_power_kw=round(init_power * (0.25 if cdu_id else 1.0), 2),
@@ -355,18 +385,26 @@ class DataHallTwinEngine:
             is_liq = rk.cooling_type == CoolingType.HYBRID_LIQUID
 
             phase = slot * 0.55 + (1.4 if is_liq else 0.0)
-            wave = 8.0 * math.sin(t * 0.035 + phase) + 4.5 * math.cos(t * 0.09 - slot)
-            base_target = 64.0 if is_liq else 48.0
+            if rk.occupancy_status == "dark_spare":
+                base_target = 6.5
+                wave = 0.6 * math.sin(t * 0.03 + phase)
+            elif rk.occupancy_status == "ghost_reservation":
+                base_target = 25.0 if is_liq else 21.0
+                wave = 2.5 * math.sin(t * 0.03 + phase)
+            else:
+                base_target = 74.0 if is_liq else 57.0
+                wave = 7.5 * math.sin(t * 0.035 + phase) + 4.0 * math.cos(t * 0.09 - slot)
+
             boost_kw = self.row_load_boost_kw.get(rk.row_id, 0.0)
             boost_util = (boost_kw / rk.max_power_kw) * 100.0
 
             target_util = np.clip(
-                base_target + wave + boost_util + float(self.rng.normal(0.0, 1.8)),
-                12.0,
+                base_target + wave + boost_util + float(self.rng.normal(0.0, 1.2)),
+                4.0,
                 99.5,
             )
-            rk.it_utilization_pct = round(0.72 * rk.it_utilization_pct + 0.28 * float(target_util), 1)
-            compute_kw = rk.max_power_kw * (0.14 + 0.82 * (rk.it_utilization_pct / 100.0))
+            rk.it_utilization_pct = round(0.76 * rk.it_utilization_pct + 0.24 * float(target_util), 1)
+            compute_kw = rk.max_power_kw * (0.05 + 0.89 * (rk.it_utilization_pct / 100.0))
 
             served_cracs = [self.cracs[cid] for cid in spec.crac_zone_ids if cid in self.cracs]
             active_cracs = [c for c in served_cracs if c.enabled and c.airflow_cfm > 1000]
@@ -562,6 +600,12 @@ class DataHallTwinEngine:
 
         wue = 0.42 + 0.024 * max(0.0, self.outdoor_wetbulb_c - 15.0)
         carbon_intensity = econ.grid_carbon_g_per_kwh_default + 25.0 * math.sin(t * 0.01)
+        effective_cop = round(
+            (total_air_heat_kw + total_liquid_heat_kw) / max(1.0, chiller_air_kw + chiller_liquid_kw), 2
+        )
+        econ_share = round(float(np.clip((26.0 - self.outdoor_wetbulb_c) * 5.8, 0.0, 82.0)), 1)
+        cond_supply_c = round(self.outdoor_wetbulb_c + 3.2, 1)
+        ctrl_mode = "bounded_autotrim" if self.auto_optimize else self.bms_control_mode
 
         metrics = FacilityMetrics(
             timestamp=time.time(),
@@ -586,6 +630,10 @@ class DataHallTwinEngine:
             liquid_cooling_share_pct=round((total_liquid_heat_kw / max(total_it_kw, 1.0)) * 100.0, 1),
             active_alarms_count=alarms_count,
             health_score=round(health_score, 1),
+            chiller_cop=effective_cop,
+            economizer_share_pct=econ_share,
+            condenser_supply_temp_c=cond_supply_c,
+            bms_control_mode=ctrl_mode,
         )
 
         self.history.append(metrics)
@@ -623,6 +671,21 @@ class DataHallTwinEngine:
             elif max_chip > 69.0:
                 cdu.supply_temp_setpoint_c = max(20.0, round(cdu.supply_temp_setpoint_c - 0.8, 2))
                 cdu.pump_speed_pct = min(98.0, round(cdu.pump_speed_pct + 6.0, 1))
+
+    def rebalance_pdu_whips(self) -> None:
+        """Balance rack whip phase assignments (L1-L2, L2-L3, L3-L1) by descending live kW per PDU."""
+        phases = ["L1-L2", "L2-L3", "L3-L1"]
+        for pdu in self.pdus.values():
+            row_racks = sorted(
+                [r for r in self.racks.values() if r.pdu_id == pdu.pdu_id],
+                key=lambda r: r.power_kw,
+                reverse=True,
+            )
+            buckets = {ph: 0.0 for ph in phases}
+            for rk in row_racks:
+                lightest_ph = min(phases, key=lambda ph: buckets[ph])
+                rk.whip_phase = lightest_ph
+                buckets[lightest_ph] += rk.power_kw
 
     def restore_manual_bms_defaults(self) -> None:
         """Revert cooling units back to conservative Priority 16 local BMS static setpoints."""
@@ -664,35 +727,35 @@ class DataHallTwinEngine:
         nodes: List[ServerNodeTelemetry] = []
 
         if rk.cooling_type == CoolingType.HYBRID_LIQUID:
-            gpu_model = "NVIDIA HGX B200 (1000W TDP)" if rk.max_power_kw >= 80.0 else "NVIDIA HGX H200 (700W TDP)"
+            gpu_model = None
             layout = [
-                (41, 2, "ToR Quantum-2 InfiniBand Switch", UChassisType.TOR_SWITCH, "High-Velocity Air", 0, 0.03),
-                (39, 2, "CDU Rack Manifold Header & Quick-Disconnects", UChassisType.LIQUID_MANIFOLD, "Direct-to-Chip Cold Plate", 0, 0.01),
-                (35, 4, "AI Node-08 (8x GPU Cold-Plate Tray)", UChassisType.AI_GPU_NODE, "Direct-to-Chip Cold Plate", 8, 0.11),
-                (31, 4, "AI Node-07 (8x GPU Cold-Plate Tray)", UChassisType.AI_GPU_NODE, "Direct-to-Chip Cold Plate", 8, 0.11),
-                (27, 4, "AI Node-06 (8x GPU Cold-Plate Tray)", UChassisType.AI_GPU_NODE, "Direct-to-Chip Cold Plate", 8, 0.11),
-                (23, 4, "AI Node-05 (8x GPU Cold-Plate Tray)", UChassisType.AI_GPU_NODE, "Direct-to-Chip Cold Plate", 8, 0.11),
-                (19, 4, "NVLink 5.0 Switch Fabric Interconnect", UChassisType.NVLINK_FABRIC, "Direct-to-Chip Cold Plate", 0, 0.06),
-                (15, 4, "AI Node-04 (8x GPU Cold-Plate Tray)", UChassisType.AI_GPU_NODE, "Direct-to-Chip Cold Plate", 8, 0.11),
-                (11, 4, "AI Node-03 (8x GPU Cold-Plate Tray)", UChassisType.AI_GPU_NODE, "Direct-to-Chip Cold Plate", 8, 0.11),
-                (7, 4, "AI Node-02 (8x GPU Cold-Plate Tray)", UChassisType.AI_GPU_NODE, "Direct-to-Chip Cold Plate", 8, 0.11),
-                (3, 4, "AI Node-01 (8x GPU Cold-Plate Tray)", UChassisType.AI_GPU_NODE, "Direct-to-Chip Cold Plate", 8, 0.11),
-                (1, 2, "48V DC Busbar Power Shelf (66 kW)", UChassisType.SHELF_PSU, "High-Velocity Air", 0, 0.02),
+                (41, 2, "Outlet Bank C9 · ToR Network Feed (Whip A/B)", UChassisType.TOR_SWITCH, "High-Velocity Air", 0, 0.03),
+                (39, 2, "Rack Liquid Manifold Header & QDC ΔP Sensor", UChassisType.LIQUID_MANIFOLD, "Direct-to-Chip Cold Plate", 0, 0.01),
+                (35, 4, "Manifold Branch #8 · PDU Outlet Bank C8", UChassisType.AI_GPU_NODE, "Direct-to-Chip Cold Plate", 8, 0.11),
+                (31, 4, "Manifold Branch #7 · PDU Outlet Bank C7", UChassisType.AI_GPU_NODE, "Direct-to-Chip Cold Plate", 8, 0.11),
+                (27, 4, "Manifold Branch #6 · PDU Outlet Bank C6", UChassisType.AI_GPU_NODE, "Direct-to-Chip Cold Plate", 8, 0.11),
+                (23, 4, "Manifold Branch #5 · PDU Outlet Bank C5", UChassisType.AI_GPU_NODE, "Direct-to-Chip Cold Plate", 8, 0.11),
+                (19, 4, "Fabric Switch Feed · PDU Outlet Bank CF", UChassisType.NVLINK_FABRIC, "Direct-to-Chip Cold Plate", 0, 0.06),
+                (15, 4, "Manifold Branch #4 · PDU Outlet Bank C4", UChassisType.AI_GPU_NODE, "Direct-to-Chip Cold Plate", 8, 0.11),
+                (11, 4, "Manifold Branch #3 · PDU Outlet Bank C3", UChassisType.AI_GPU_NODE, "Direct-to-Chip Cold Plate", 8, 0.11),
+                (7, 4, "Manifold Branch #2 · PDU Outlet Bank C2", UChassisType.AI_GPU_NODE, "Direct-to-Chip Cold Plate", 8, 0.11),
+                (3, 4, "Manifold Branch #1 · PDU Outlet Bank C1", UChassisType.AI_GPU_NODE, "Direct-to-Chip Cold Plate", 8, 0.11),
+                (1, 2, "48V Rectifier Shelf · Primary Feed Meter", UChassisType.SHELF_PSU, "High-Velocity Air", 0, 0.02),
             ]
         else:
-            gpu_model = "NVIDIA L40S Inference" if rk.gpu_count > 0 else None
+            gpu_model = None
             layout = [
-                (41, 2, "ToR 100GbE Leaf Switch Pair", UChassisType.TOR_SWITCH, "High-Velocity Air", 0, 0.04),
-                (37, 4, "Compute Blade Tray 09 (Dual EPYC)", UChassisType.COMPUTE_BLADE, "High-Velocity Air", 0, 0.10),
-                (33, 4, "Compute Blade Tray 08 (Dual EPYC)", UChassisType.COMPUTE_BLADE, "High-Velocity Air", 0, 0.10),
-                (29, 4, "Compute Blade Tray 07 (Dual EPYC)", UChassisType.COMPUTE_BLADE, "High-Velocity Air", 0, 0.10),
-                (25, 4, "Compute Blade Tray 06 (Dual EPYC)", UChassisType.COMPUTE_BLADE, "High-Velocity Air", 0, 0.10),
-                (21, 4, "NVMe-oF Flash Array Enclosure 05", UChassisType.STORAGE_ARRAY, "High-Velocity Air", 0, 0.11),
-                (17, 4, "NVMe-oF Flash Array Enclosure 04", UChassisType.STORAGE_ARRAY, "High-Velocity Air", 0, 0.11),
-                (13, 4, "Compute Blade Tray 03 (Inference)", UChassisType.COMPUTE_BLADE, "High-Velocity Air", 2 if gpu_model else 0, 0.11),
-                (9, 4, "Compute Blade Tray 02 (Inference)", UChassisType.COMPUTE_BLADE, "High-Velocity Air", 2 if gpu_model else 0, 0.11),
-                (5, 4, "Compute Blade Tray 01 (Core Services)", UChassisType.COMPUTE_BLADE, "High-Velocity Air", 0, 0.09),
-                (1, 4, "Redundant AC/DC Power Supply Shelf", UChassisType.SHELF_PSU, "High-Velocity Air", 0, 0.03),
+                (41, 2, "Smart-PDU Outlet Bank A9 (ToR Switch Feed)", UChassisType.TOR_SWITCH, "High-Velocity Air", 0, 0.04),
+                (37, 4, "Smart-PDU Outlet Bank A8 (U37–40 Circuit)", UChassisType.COMPUTE_BLADE, "High-Velocity Air", 0, 0.10),
+                (33, 4, "Smart-PDU Outlet Bank A7 (U33–36 Circuit)", UChassisType.COMPUTE_BLADE, "High-Velocity Air", 0, 0.10),
+                (29, 4, "Smart-PDU Outlet Bank A6 (U29–32 Circuit)", UChassisType.COMPUTE_BLADE, "High-Velocity Air", 0, 0.10),
+                (25, 4, "Smart-PDU Outlet Bank A5 (U25–28 Circuit)", UChassisType.COMPUTE_BLADE, "High-Velocity Air", 0, 0.10),
+                (21, 4, "Smart-PDU Outlet Bank A4 (U21–24 Circuit)", UChassisType.STORAGE_ARRAY, "High-Velocity Air", 0, 0.11),
+                (17, 4, "Smart-PDU Outlet Bank A3 (U17–20 Circuit)", UChassisType.STORAGE_ARRAY, "High-Velocity Air", 0, 0.11),
+                (13, 4, "Smart-PDU Outlet Bank A2 (U13–16 Circuit)", UChassisType.COMPUTE_BLADE, "High-Velocity Air", 0, 0.11),
+                (9, 4, "Smart-PDU Outlet Bank A1 (U09–12 Circuit)", UChassisType.COMPUTE_BLADE, "High-Velocity Air", 0, 0.11),
+                (5, 4, "Smart-PDU Outlet Bank A0 (U05–08 Circuit)", UChassisType.COMPUTE_BLADE, "High-Velocity Air", 0, 0.09),
+                (1, 4, "Dual-Cord ATS & Primary Whip Meter (U01–04)", UChassisType.SHELF_PSU, "High-Velocity Air", 0, 0.03),
             ]
 
         for u_start, u_height, label, ctype, cmode, gpus, p_weight in layout:
